@@ -13,7 +13,7 @@ class ShotgunWrapperError(Exception):
 
 # This is the base Shotgun class. Everything is created from here, and it deals with talking to the
 # standard Shotgun API.
-class Shotgun():
+class Shotgun(object):
 	def __init__(self, sgServer='', sgScriptName='', 
 			sgScriptKey='', sg=None):
 		
@@ -190,7 +190,7 @@ class Shotgun():
 					if entity.modified_fields():
 						entity.commit()
 		
-class Entity():
+class Entity(object):
 	def __init__(self, shotgun, entity_type, fields):
 		self._entity_type = entity_type
 		self._shotgun = shotgun
