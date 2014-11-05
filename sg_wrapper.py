@@ -14,8 +14,15 @@ class ShotgunWrapperError(Exception):
 # This is the base Shotgun class. Everything is created from here, and it deals with talking to the
 # standard Shotgun API.
 class Shotgun():
-	def __init__(self, sgServer, sgScriptName, sgScriptKey):
-		self._sg = shotgun_api3.Shotgun(sgServer, sgScriptName, sgScriptKey)
+	def __init__(self, sgServer='', sgScriptName='', 
+			sgScriptKey='', sg=None):
+		
+		if sg:
+			self._sg = sg
+		elif sgServer and sgScriptName and sgScriptKey:
+			self._sg = shotgun_api3.Shotgun(sgServer, sgScriptName, sgScriptKey)
+		else:
+			raise RuntimeError('init requires a shotgun object or server, script name and key')
 		self._entity_types = self.get_entity_list()
 		self._entity_fields = {}
 		self._entities = {}
