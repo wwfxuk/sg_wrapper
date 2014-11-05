@@ -8,6 +8,42 @@ primaryTextKeys = ["code", "login", "name"]
 # This dictionary defines any custom plural forms that we might want to have.
 customPlural = {'Person': "People"}
 
+baseOperator = frozenset([
+	'is',
+	'is_not',
+	'less_than',
+	'greater_than',       
+	'contains',           
+	'not_contains',       
+	'starts_with',        
+	'ends_with',          
+	'between',            
+	'not_between',        
+	'in_last',            		     
+	'in_next',            
+	'in',                 
+	'not_in',                 
+	'type_is',            
+	'type_is_not',        
+	'in_calendar_day',    
+	'in_calendar_week',   
+	'in_calendar_month',    
+	'name_contains',      
+	'name_not_contains',  
+	'name_starts_with',   
+	'name_ends_with',     
+	])
+
+operatorMap = {
+	'!': 'is_not',
+	'type': 'type_is',
+	'!type': 'type_is_not',
+	'startswith': 'starts_with',
+	'endswith': 'ends_with',
+	'<': 'less_than',
+	'>': 'greater_than',
+	}
+
 class ShotgunWrapperError(Exception):
 	pass
 
@@ -123,7 +159,23 @@ class Shotgun(object):
 		
 		sgFilters = []
 		for f in filters:
-			sgFilters.append([f, 'is', filters[f]])
+			
+			filterValue = filters[f]
+			if isinstance(filterValue, tuple):
+				op = filterValue[0]
+				value = filterValue[1]
+
+				if op not in baseOperator:
+					_op = op
+					op = operatorMap.get(_op, None)
+
+					if not op:
+						raise ValueError('Unknown operator: %s' % _op)
+			else:
+				op = 'is'
+				value = filterValue
+
+			sgFilters.append([f, op, value])
 		
 		result = None
 
