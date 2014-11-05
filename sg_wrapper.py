@@ -106,7 +106,8 @@ class Shotgun(object):
 				return True
 		return False
 	
-	def find_entity(self, entityType, key = None, find_one = True, fields = None, exclude_fields = None, **kwargs):
+	def find_entity(self, entityType, key = None, find_one = True, fields = None,
+			order=None, exclude_fields = None, **kwargs):
 		filters = {}
 		
 		thisEntityType = None
@@ -154,9 +155,27 @@ class Shotgun(object):
 			if search['find_one'] == find_one \
 			  and search['entity_type'] == thisEntityType \
 			  and search['filters'] == filters \
+			  and search['order'] == order \
 			  and set(fields).issubset(set(search['fields'])):
 				return search['result']
 		
+		sgOrder = []
+		if order:
+		    
+			i=0
+			orderLen = len(order)
+			while True:
+				try:
+					direction = order[i]
+					field = order[i+1]
+				except IndexError:
+					raise RuntimeError('Order error: %s' % str(order))
+				else:
+					sgOrder.append({'field_name': field, 'direction': direction})
+					i+=2
+					if i >= orderLen:
+						break
+
 		sgFilters = []
 		for f in filters:
 			
@@ -176,16 +195,16 @@ class Shotgun(object):
 				value = filterValue
 
 			sgFilters.append([f, op, value])
-		
+	
 		result = None
 
 		if find_one:
-			sg_result = self.sg_find_one(thisEntityType, sgFilters, fields)
+			sg_result = self.sg_find_one(thisEntityType, sgFilters, fields, sgOrder)
 
 			if sg_result:
 				result = Entity(self, thisEntityType, sg_result)
 		else:
-			sg_results = self.sg_find(thisEntityType, sgFilters, fields)
+			sg_results = self.sg_find(thisEntityType, sgFilters, fields, sgOrder)
 			result = []
 			for sg_result in sg_results:
 				result.append(Entity(self, thisEntityType, sg_result))
@@ -194,17 +213,20 @@ class Shotgun(object):
 		thisSearch['find_one'] = find_one
 		thisSearch['entity_type'] = thisEntityType
 		thisSearch['filters'] = filters
+		#thisSearch['sgOrder'] = sgOrder
+		thisSearch['order'] = order
 		thisSearch['fields'] = fields
 		thisSearch['result'] = result
 		self._entity_searches.append(thisSearch)
 		
 		return result
 
-	def sg_find_one(self, entityType, filters, fields):
-		return self._sg.find_one(entityType, filters, fields)
+	def sg_find_one(self, entityType, filters, fields, order=None):
+		return self._sg.find_one(entityType, filters, fields, order)
 
-	def sg_find(self, entityType, filters, fields):
-		return self._sg.find(entityType, filters, fields)
+	def sg_find(self, entityType, filters, fields, order=None):
+		#print order
+		return self._sg.find(entityType, filters, fields, order)
 	
 	def update(self, entity, updateFields):
 		updateData = {}
