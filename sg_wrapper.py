@@ -8,6 +8,9 @@ primaryTextKeys = ["code", "login"]
 # This dictionary defines any custom plural forms that we might want to have.
 customPlural = {'Person': "People"}
 
+class ShotgunWrapperError(Exception):
+	pass
+
 # This is the base Shotgun class. Everything is created from here, and it deals with talking to the
 # standard Shotgun API.
 class Shotgun():
@@ -281,3 +284,5 @@ class Entity():
 		
 	def __setitem__(self, itemName, value):
 		self.set_field(itemName, value)
+
+# vim:set ts=8 sw=8 noexpandtab:
