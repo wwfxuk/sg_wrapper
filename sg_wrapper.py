@@ -2,7 +2,7 @@ import shotgun_api3
 
 # The Primary Text Keys are the field names to check when not defined.
 # For example, calling sg.Project("my_project") will be the same as sg.Project(code = "my_project")
-primaryTextKeys = ["code", "login"]
+primaryTextKeys = ["code", "login", "name"]
 
 # For most entity types, the pluralise() function will define what the plural version of the entity name is.
 # This dictionary defines any custom plural forms that we might want to have.
