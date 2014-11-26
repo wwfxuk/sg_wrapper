@@ -263,7 +263,22 @@ class Shotgun(object):
 				for entity in self._entities[entityType][entityId]:
 					if entity.modified_fields():
 						entity.commit()
+	
+	def create(self, entityType, **kwargs):
 		
+		data = {}
+
+		for arg in kwargs:
+			if isinstance(kwargs[arg], Entity):
+				data[arg] = {'type': kwargs[arg].entity_type(), 'id': kwargs[arg].entity_id()}
+			else:
+				data[arg] = kwargs[arg]
+
+		sgResult = self._sg.create(entityType, data)
+
+		return Entity(self, sgResult['type'], sgResult)
+
+
 class Entity(object):
 	def __init__(self, shotgun, entity_type, fields):
 		self._entity_type = entity_type
