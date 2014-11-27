@@ -183,7 +183,10 @@ class Shotgun(object):
 			if isinstance(filterValue, tuple):
 				op = filterValue[0]
 				value = filterValue[1]
-
+				
+				if isinstance(value, Entity):
+					value = {'type': value.entity_type(), 'id': value.entity_id()}
+				
 				if op not in baseOperator:
 					_op = op
 					op = operatorMap.get(_op, None)
