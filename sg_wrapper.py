@@ -266,15 +266,26 @@ class Shotgun(object):
 	
 	def create(self, entityType, **kwargs):
 		
+		for e in self._entity_types:
+			if entityType in [e['type'], e['name'], e['type_plural'], e['name_plural']]:
+				thisEntityType = e['type']
+				if not e['fields']:
+					e['fields'] = self.get_entity_field_list(thisEntityType)
+				thisEntityFields = e['fields']
+
 		data = {}
 
 		for arg in kwargs:
+
+			if arg not in thisEntityFields:
+				continue
+
 			if isinstance(kwargs[arg], Entity):
 				data[arg] = {'type': kwargs[arg].entity_type(), 'id': kwargs[arg].entity_id()}
 			else:
 				data[arg] = kwargs[arg]
 
-		sgResult = self._sg.create(entityType, data)
+		sgResult = self._sg.create(thisEntityType, data)
 
 		return Entity(self, sgResult['type'], sgResult)
 
@@ -380,5 +391,8 @@ class Entity(object):
 		
 	def __setitem__(self, itemName, value):
 		self.set_field(itemName, value)
+	
+	def upload(self, field, path):
+		self._shotgun._sg.upload(self.entity_type(), self.entity_id(), path, field)
 
 # vim:set ts=8 sw=8 noexpandtab:
