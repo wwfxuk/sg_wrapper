@@ -234,7 +234,12 @@ class Shotgun(object):
 	def update(self, entity, updateFields):
 		updateData = {}
 		for f in updateFields:
-			updateData[f] = entity.field(f)
+			field = entity.field(f)
+			if isinstance(field, Entity):
+				updateData[f] = {'type': field['type'], 'id': field['id']}
+			else:
+				updateData[f] = field
+
 		self._sg.update(entity._entity_type, entity._entity_id, updateData)
 	
 	def register_entity(self, entity):
@@ -287,7 +292,7 @@ class Shotgun(object):
 				data[arg] = {'type': kwargs[arg].entity_type(), 'id': kwargs[arg].entity_id()}
 			else:
 				data[arg] = kwargs[arg]
-
+		
 		sgResult = self._sg.create(thisEntityType, data)
 
 		return Entity(self, sgResult['type'], sgResult)
