@@ -314,6 +314,16 @@ class Entity(object):
 		self._fields = self._shotgun.sg_find_one(self._entity_type, [["id", "is", self._entity_id]], fields = self._field_names)
 	
 	def fields(self):
+		# Workaround to fix the attachment access to path fields problem.
+		# Attachements are handle differently by SG as some fields
+		# are dynamic and not described in the schema making sw_wrapper
+		# go wrong.
+		if self._entity_type == 'Attachment':
+			attrNames = self._fields.keys()
+			attrNames.extend(self._fields['this_file'].keys())
+			attrNames.remove('this_file')
+			return attrNames
+
 		return self._fields.keys()
 	
 	def entity_type(self):
@@ -389,8 +399,7 @@ class Entity(object):
 		# Attachements are handle differently by SG as some fields
 		# are dynamic and not described in the schema making sw_wrapper
 		# go wrong.
-		if self._entity_type == 'Attachment' and \
-			    'local_path' in attrName:
+		if self._entity_type == 'Attachment':
 			if attrName in self._fields:
 				return self._fields[attrName]
 			elif attrName in self._fields['this_file']:
