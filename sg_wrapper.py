@@ -385,6 +385,19 @@ class Entity(object):
 			raise AttributeError("Entity '%s' has no field '%s'" % (self._entity_type, fieldName))
 		
 	def __getattr__(self, attrName):
+		# Workaround to fix the attachment access to path fields problem.
+		# Attachements are handle differently by SG as some fields
+		# are dynamic and not described in the schema making sw_wrapper
+		# go wrong.
+		if self._entity_type == 'Attachment' and \
+			    'local_path' in attrName:
+			if attrName in self._fields:
+				return self._fields[attrName]
+			elif attrName in self._fields['this_file']:
+				return self._fields['this_file'][attrName]
+			else:
+				raise AttributeError("Entity '%s' has no field '%s'" % (
+						self._entity_type, attrName))
 		return self.field(attrName)
 	
 	def __setattr__(self, attrName, value):
