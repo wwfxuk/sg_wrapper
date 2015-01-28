@@ -297,17 +297,32 @@ class Shotgun(object):
 					e['fields'] = self.get_entity_field_list(thisEntityType)
 				thisEntityFields = e['fields']
 
+		entityFields = self.get_entity_fields(thisEntityType)
+
 		data = {}
 
 		for arg in kwargs:
 
 			if arg not in thisEntityFields:
 				continue
+			
+			# assume a list here
+			if entityFields[arg]['data_type']['value'] == 'multi_entity':
+				data[arg] = []
+				for e in kwargs[arg]:	
+				    if isinstance(e, Entity):
+					data[arg].append({
+						'type': e['type'], 
+						'id': e['id']})
+				    else:
+					data[arg].append(e)
 
-			if isinstance(kwargs[arg], Entity):
-				data[arg] = {'type': kwargs[arg].entity_type(), 'id': kwargs[arg].entity_id()}
 			else:
-				data[arg] = kwargs[arg]
+
+				if isinstance(kwargs[arg], Entity):
+					data[arg] = {'type': kwargs[arg].entity_type(), 'id': kwargs[arg].entity_id()}
+				else:
+					data[arg] = kwargs[arg]
 		
 		sgResult = self._sg.create(thisEntityType, data)
 
