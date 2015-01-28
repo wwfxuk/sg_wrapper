@@ -232,14 +232,30 @@ class Shotgun(object):
 		return self._sg.find(entityType, filters, fields, order)
 	
 	def update(self, entity, updateFields):
+
+		entityFields = self.get_entity_fields(entity.entity_type())
+
 		updateData = {}
 		for f in updateFields:
 			field = entity.field(f)
-			if isinstance(field, Entity):
-				updateData[f] = {'type': field['type'], 'id': field['id']}
-			else:
-				updateData[f] = field
+			
+			# assume a list here
+			if entityFields[f]['data_type']['value'] == 'multi_entity':
+				updateData[f] = []
+				for e in field:	
+				    if isinstance(e, Entity):
+					updateData[f].append({
+						'type': e['type'], 
+						'id': e['id']})
+				    else:
+					updateData[f].append(e)
 
+			else:
+				if isinstance(field, Entity):
+					updateData[f] = {'type': field['type'], 'id': field['id']}
+				else:
+					updateData[f] = field
+	    
 		self._sg.update(entity._entity_type, entity._entity_id, updateData)
 	
 	def register_entity(self, entity):
@@ -316,7 +332,7 @@ class Entity(object):
 	def fields(self):
 		# Workaround to fix the attachment access to path fields problem.
 		# Attachements are handle differently by SG as some fields
-		# are dynamic and not described in the schema making sw_wrapper
+		# are dynamic and not described in the schema making sg_wrapper
 		# go wrong.
 		if self._entity_type == 'Attachment':
 			attrNames = self._fields.keys()
@@ -352,12 +368,17 @@ class Entity(object):
 		raise AttributeError("Entity '%s' has no field '%s'" % (self._entity_type, fieldName))
 
 	def list_iterator(self, entities):
+		
 		for entity in entities:
-			if 'entity' not in entity:
-				entity['entity'] = self._shotgun.find_entity(entity['type'], id = entity['id'])
-				#entity['entity'] = Entity(self._shotgun, entity['type'], {'id': entity['id']})
+
+			# comment this line
+			# not sure why this was originally added...
+
+			#if 'entity' not in entity:
+				#entity['entity'] = self._shotgun.find_entity(entity['type'], id = entity['id'])
+				##entity['entity'] = Entity(self._shotgun, entity['type'], {'id': entity['id']})
 			
-			yield entity['entity']
+			yield entity
 		
 	def modified_fields(self):
 		return self._fields_changed.keys()
@@ -382,8 +403,11 @@ class Entity(object):
 				del self._fields_changed[field]
 		
 	def set_field(self, fieldName, value):
+		
 		entityFields = self._shotgun.get_entity_fields(self._entity_type)
+		
 		if fieldName in entityFields:
+			
 			if entityFields[fieldName]['editable']['value'] == True:
 				oldValue = self._fields[fieldName]
 				self._fields[fieldName] = value
