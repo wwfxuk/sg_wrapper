@@ -48,3 +48,31 @@ me.reload()
 # Also, any searches are cached, and will return the same result if searched for again
 # To clear the cache, and force any requests to update from the server:
 sg.clear_cache()
+
+# Mikros addons
+
+- Init sg_wrapper object from an existing Shotgun object:
+
+sgw = sg_wrapper.Shotgun(sg=sg)
+
+- Support operator:
+
+assets2 = sgw.Assets(project=p, sg_asset_type=('is_not', 'Character'))
+
+- Support order:
+
+pf = sgw.PublishedFiles(project=p, order=('desc', 'created_at'))
+
+- Support more shotgun function 
+
+create: asset = sgw.create('Asset', project=p, code='testAsset')
+upload: ve.upload('sg_uploaded_movie', movie) # ve: Version
+
+- Published file path retrieval
+
+pf.path.local_path
+
+- Misc
+
+support fields of type multi_entity
+
