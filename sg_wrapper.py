@@ -51,12 +51,12 @@ class ShotgunWrapperError(Exception):
 # standard Shotgun API.
 class Shotgun(object):
 	def __init__(self, sgServer='', sgScriptName='', 
-			sgScriptKey='', sg=None):
+			sgScriptKey='', sg=None, **kwargs):
 		
 		if sg:
 			self._sg = sg
 		elif sgServer and sgScriptName and sgScriptKey:
-			self._sg = shotgun_api3.Shotgun(sgServer, sgScriptName, sgScriptKey)
+			self._sg = shotgun_api3.Shotgun(sgServer, sgScriptName, sgScriptKey, kwargs)
 		else:
 			raise RuntimeError('init requires a shotgun object or server, script name and key')
 		self._entity_types = self.get_entity_list()
@@ -341,6 +341,7 @@ class Entity(object):
 		self._shotgun.register_entity(self)
 	
 	def reload(self):
+
 		self._field_names = self._shotgun.get_entity_field_list(self._entity_type)
 		self._fields = self._shotgun.sg_find_one(self._entity_type, [["id", "is", self._entity_id]], fields = self._field_names)
 	
@@ -463,5 +464,32 @@ class Entity(object):
 	
 	def upload(self, field, path):
 		self._shotgun._sg.upload(self.entity_type(), self.entity_id(), path, field)
+	
+	# 'partial' pickle support
+	# limitations: only support UTC datetime (no timezone)
+	# after unpickle, call attach method to attach entity to a Shotgun connection
+	
+	def attach(self, sg):
 
+		''' After unpickle, attach entity to a Shotgun connection
+		'''
+
+		if hasattr(self, '_shotgun'):
+			return
+
+		if isinstance(sg, Shotgun):
+			self._shotgun = sg
+			self._shotgun.register_entity(self)
+		else:
+			raise RuntimeError('sg should be of type sg_wrapper.Shotgun not %s' % type(sg))
+	
+	def __getstate__(self):
+		odict = self.__dict__.copy() # copy the dict since we change it
+		del odict['_shotgun']        # remove shotgun entry
+		return odict
+
+	def __setstate__(self, adict):
+		
+		self.__dict__.update(adict)
+		
 # vim:set ts=8 sw=8 noexpandtab:
