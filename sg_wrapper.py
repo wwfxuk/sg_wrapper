@@ -56,7 +56,7 @@ class Shotgun(object):
 		if sg:
 			self._sg = sg
 		elif sgServer and sgScriptName and sgScriptKey:
-			self._sg = shotgun_api3.Shotgun(sgServer, sgScriptName, sgScriptKey, kwargs)
+			self._sg = shotgun_api3.Shotgun(sgServer, sgScriptName, sgScriptKey, **kwargs)
 		else:
 			raise RuntimeError('init requires a shotgun object or server, script name and key')
 		self._entity_types = self.get_entity_list()

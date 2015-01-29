@@ -75,4 +75,5 @@ pf.path.local_path
 - Misc
 
 support fields of type multi_entity
+'partial' pickle support
 
