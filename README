@@ -75,5 +75,6 @@ pf.path.local_path
 - Misc
 
 support fields of type multi_entity
+improved reload method
 'partial' pickle support
 

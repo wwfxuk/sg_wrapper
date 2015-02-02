@@ -349,10 +349,36 @@ class Entity(object):
 		self._entity_id = self._fields['id']
 		self._shotgun.register_entity(self)
 	
-	def reload(self):
+	def reload(self, mode='all', fields=None):
 
-		self._field_names = self._shotgun.get_entity_field_list(self._entity_type)
-		self._fields = self._shotgun.sg_find_one(self._entity_type, [["id", "is", self._entity_id]], fields = self._field_names)
+		''' Reload (ie. refresh) entity from Shotgun (no cache)
+
+		:param mode:
+		        * all: query all entity fields (default)
+			* basic: query entity with existing fields
+			* replace: query entity with fields provided as argument
+			* append: query entity with existing fields + fields provided as argument
+		:type mode: str
+		:param fields: fields to query (for mode 'replace' or 'append')
+		:type fields: dict
+		'''
+
+		fieldsToQuery = []
+	    
+		if mode == 'all':
+
+			self._field_names = self._shotgun.get_entity_field_list(self._entity_type)
+			fieldsToQuery = self._field_names
+		elif mode == 'basic':
+			fieldsToQuery = self._fields.keys()
+		elif mode == 'replace':
+			fieldsToQuery = fields
+		elif mode == 'append':
+			fieldsToQuery = self._fields.keys() + fields
+		else:
+			raise ValueError('Unknown mode: %s' % (mode))
+		
+		self._fields = self._shotgun.sg_find_one(self._entity_type, [["id", "is", self._entity_id]], fields = fieldsToQuery)
 	
 	def fields(self):
 		# Workaround to fix the attachment access to path fields problem.
