@@ -76,5 +76,6 @@ pf.path.local_path
 
 support fields of type multi_entity
 improved reload method
+add unregister_entity method
 'partial' pickle support
 

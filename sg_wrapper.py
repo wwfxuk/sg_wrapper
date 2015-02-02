@@ -150,7 +150,23 @@ class Shotgun(object):
 		
 		if 'id' in filters:
 			if thisEntityType in self._entities and filters['id'] in self._entities[thisEntityType]:
-				return self._entities[thisEntityType][filters['id']]
+				
+				entity = self._entities[thisEntityType][filters['id']]
+
+				if fields: 
+					
+					# check all required fields are already 
+					# in cached entity fields
+					if set(fields) <= set(entity.fields()):
+						# from cache ...
+						return entity
+					else:
+						# remove entity from cache 
+						# it will be added again after the new query
+						self.unregister_entity(entity)
+				else:
+					# from cache ...
+					return entity
 
 		if not fields:
 			fields = self.get_entity_field_list(thisEntityType)
@@ -273,7 +289,13 @@ class Shotgun(object):
 		
 		if entity._entity_id not in self._entities[entity._entity_type]:
 			self._entities[entity._entity_type][entity._entity_id] = entity
-	
+
+	def unregister_entity(self, entity):
+
+		if entity._entity_type in self._entities:
+			if entity._entity_id in self._entities[entity._entity_type]:
+				del(self._entities[entity._entity_type][entity._entity_id])
+
 	def clear_cache(self):
 		self._entities = {}
 		self._entity_searches = []
