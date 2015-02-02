@@ -44,12 +44,21 @@ operatorMap = {
 	'>': 'greater_than',
 	}
 
+# Shotgun field types where a list is expected
+dataTypeList = frozenset([
+	'multi_entity',
+	'tag_list',
+	'addressing'
+	])
+
 class ShotgunWrapperError(Exception):
 	pass
+
 
 # This is the base Shotgun class. Everything is created from here, and it deals with talking to the
 # standard Shotgun API.
 class Shotgun(object):
+	
 	def __init__(self, sgServer='', sgScriptName='', 
 			sgScriptKey='', sg=None, **kwargs):
 		
@@ -240,7 +249,7 @@ class Shotgun(object):
 			field = entity.field(f)
 			
 			# assume a list here
-			if entityFields[f]['data_type']['value'] == 'multi_entity':
+			if entityFields[f]['data_type']['value'] in dataTypeList:
 				updateData[f] = []
 				for e in field:	
 				    if isinstance(e, Entity):
@@ -307,7 +316,7 @@ class Shotgun(object):
 				continue
 			
 			# assume a list here
-			if entityFields[arg]['data_type']['value'] == 'multi_entity':
+			if entityFields[arg]['data_type']['value'] in dataTypeList:
 				data[arg] = []
 				for e in kwargs[arg]:	
 				    if isinstance(e, Entity):
