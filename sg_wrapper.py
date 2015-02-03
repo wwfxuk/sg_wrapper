@@ -443,16 +443,18 @@ class Entity(object):
     def list_iterator(self, entities):
         
         for entity in entities:
+	    
+	    # ie for Asset.tag_list (list of str) or for Asset.tasks (list of sg_wrapper.Entity) 
+	    if isinstance(entity, basestring) or isinstance(entity, Entity):
+		    yield entity
+		    # Warning: do not remove it or iterator will break (ie for tag_list)
+		    continue
+	    
+	    if 'entity' not in entity:
+		entity['entity'] = self._shotgun.find_entity(entity['type'], id = entity['id'])
 
-            # comment this line
-            # not sure why this was originally added...
+	    yield entity['entity']
 
-            #if 'entity' not in entity:
-                #entity['entity'] = self._shotgun.find_entity(entity['type'], id = entity['id'])
-                ##entity['entity'] = Entity(self._shotgun, entity['type'], {'id': entity['id']})
-            
-            yield entity
-        
     def modified_fields(self):
         return self._fields_changed.keys()
     
