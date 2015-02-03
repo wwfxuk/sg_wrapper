@@ -525,7 +525,7 @@ class Entity(object):
         self._shotgun._sg.upload(self.entity_type(), self.entity_id(), path, field)
     
     # 'partial' pickle support
-    # limitations: only support UTC datetime (no timezone)
+    # limitations: could not pickle and unpickle if convert_datetimes_to_utc parameter (see Shotgun api) is not the same 
     # after unpickle, call attach method to attach entity to a Shotgun connection
     
     def attach(self, sg):
@@ -544,10 +544,54 @@ class Entity(object):
     
     def __getstate__(self):
         odict = self.__dict__.copy() # copy the dict since we change it
-        del odict['_shotgun']        # remove shotgun entry
+
+        sg = odict['_shotgun']._sg
+        
+        convertUtc = sg.config.convert_datetimes_to_utc 
+
+        if convertUtc == True:
+            
+            # datetimes are in local timezone
+            # not pickable so convert to utc then discard timezone
+            
+            from datetime import datetime
+            # copy _fields dict since we change it 
+            fieldsDict = odict['_fields'].copy()
+
+            for k in fieldsDict:
+                if isinstance(fieldsDict[k], datetime):
+                    
+                    newDate = fieldsDict[k].astimezone(shotgun_api3.sg_timezone.utc)
+                    # discard utc timezone (note that datetime objects are immutable)
+                    newDate = newDate.replace(tzinfo=None)
+
+                    fieldsDict[k] = newDate
+
+            odict['_fields'] = fieldsDict
+
+        # store shotgun config
+        odict['_pickle_shotgun_convert_datetimes_to_utc'] = convertUtc
+        del odict['_shotgun'] # remove shotgun entry
         return odict
 
     def __setstate__(self, adict):
-        
+       
+        convertUtc = adict['_pickle_shotgun_convert_datetimes_to_utc']
+
+        if convertUtc == True:
+
+            from datetime import datetime
+            fieldsDict = adict['_fields']
+            
+            for k in fieldsDict:
+                if isinstance(fieldsDict[k], datetime):
+                    currentDate = fieldsDict[k]
+                    # add utc timezone then convert to local time zone
+                    currentDate = currentDate.replace(tzinfo=shotgun_api3.sg_timezone.utc)
+                    fieldsDict[k] = currentDate.astimezone(shotgun_api3.sg_timezone.local)
+
+        # remove shotgun config
+        del adict['_pickle_shotgun_convert_datetimes_to_utc']
+
         self.__dict__.update(adict)
         
