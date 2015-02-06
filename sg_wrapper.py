@@ -233,6 +233,7 @@ class Shotgun(object):
                 result = Entity(self, thisEntityType, sg_result)
         else:
             sg_results = self.sg_find(thisEntityType, sgFilters, fields, sgOrder)
+            
             result = []
             for sg_result in sg_results:
                 result.append(Entity(self, thisEntityType, sg_result))
@@ -376,7 +377,7 @@ class Entity(object):
         ''' Reload (ie. refresh) entity from Shotgun (no cache)
 
         :param mode:
-                * all: query all entity fields (default)
+            * all: query all entity fields (default)
             * basic: query entity with existing fields
             * replace: query entity with fields provided as argument
             * append: query entity with existing fields + fields provided as argument
@@ -421,16 +422,31 @@ class Entity(object):
     def entity_id(self):
         return self._entity_id
     
-    def field(self, fieldName):
+    def field(self, fieldName, fields=None):
+        
+        ''' Get entity field
+
+        :param fieldName: field name to get
+        :type fieldName: str
+        :param fields: list of fields to get (optional, default to all)
+        :type fields: list
+
+        .. note:: for speed purpose, specifying a small list of fields could help
+        '''
+        
         if fieldName in self._fields:
             attribute = self._fields[fieldName]
             if type(attribute) == dict and 'id' in attribute and 'type' in attribute:
                 if 'entity' not in attribute:
-                    attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'])
+
+                    if fields:
+                        attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'], fields=fields)
+                    else:
+                        attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'])
                     #attribute['entity'] = Entity(self._shotgun, attribute['type'], {'id': attribute['id']})
                 return attribute['entity']
             elif type(attribute) == list:
-                iterator = self.list_iterator(self._fields[fieldName])
+                iterator = self.list_iterator(self._fields[fieldName], fields)
                 attrResult = []
                 for item in iterator:
                     attrResult.append(item)
@@ -440,7 +456,7 @@ class Entity(object):
             
         raise AttributeError("Entity '%s' has no field '%s'" % (self._entity_type, fieldName))
 
-    def list_iterator(self, entities):
+    def list_iterator(self, entities, fields):
         
         for entity in entities:
 	    
@@ -451,7 +467,10 @@ class Entity(object):
 		    continue
 	    
 	    if 'entity' not in entity:
-		entity['entity'] = self._shotgun.find_entity(entity['type'], id = entity['id'])
+                if fields:
+		    entity['entity'] = self._shotgun.find_entity(entity['type'], id = entity['id'], fields=fields)
+                else:
+		    entity['entity'] = self._shotgun.find_entity(entity['type'], id = entity['id'])
 
 	    yield entity['entity']
 
