@@ -431,7 +431,9 @@ class Entity(object):
         :param fields: list of fields to get (optional, default to all)
         :type fields: list
 
-        .. note:: for speed purpose, specifying a small list of fields could help
+        .. note:: 
+            for speed purpose, specifying a small list of fields 
+            could help (if entity is not already in cache)
         '''
         
         if fieldName in self._fields:
