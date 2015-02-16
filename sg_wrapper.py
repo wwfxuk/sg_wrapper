@@ -566,9 +566,14 @@ class Entity(object):
     def __getstate__(self):
         odict = self.__dict__.copy() # copy the dict since we change it
 
-        sg = odict['_shotgun']._sg
-        
-        convertUtc = sg.config.convert_datetimes_to_utc 
+        if '_shotgun' in odict:
+
+            sg = odict['_shotgun']._sg
+            convertUtc = sg.config.convert_datetimes_to_utc 
+        elif '_pickle_shotgun_convert_datetimes_to_utc' in odict:
+            convertUtc = odict['_pickle_shotgun_convert_datetimes_to_utc']
+        else:
+            raise RuntimeError
 
         if convertUtc == True:
             
@@ -590,9 +595,12 @@ class Entity(object):
 
             odict['_fields'] = fieldsDict
 
-        # store shotgun config
-        odict['_pickle_shotgun_convert_datetimes_to_utc'] = convertUtc
-        del odict['_shotgun'] # remove shotgun entry
+        if '_shotgun' in odict:
+            
+            # store shotgun config
+            odict['_pickle_shotgun_convert_datetimes_to_utc'] = convertUtc
+            del odict['_shotgun'] # remove shotgun entry
+        
         return odict
 
     def __setstate__(self, adict):
@@ -611,8 +619,8 @@ class Entity(object):
                     currentDate = currentDate.replace(tzinfo=shotgun_api3.sg_timezone.utc)
                     fieldsDict[k] = currentDate.astimezone(shotgun_api3.sg_timezone.local)
 
-        # remove shotgun config
-        del adict['_pickle_shotgun_convert_datetimes_to_utc']
+        # do not remove shotgun config - so re pickle will work
+        #del adict['_pickle_shotgun_convert_datetimes_to_utc']
 
         self.__dict__.update(adict)
         
