@@ -78,4 +78,5 @@ Support fields of type multi_entity
 Improved reload method
 Add unregister_entity method
 Pickle support (see attach method)
+translate_entity_type method (name of CustomEntity)
 

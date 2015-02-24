@@ -93,7 +93,20 @@ class Shotgun(object):
             entities.append(newEntity)
             
         return entities
-    
+   
+    def translate_entity_type(self, entityType):
+
+        ''' Translate entity type to 'real' entity type (ie. CustomEntity02 -> Master)
+        '''
+
+        r = [ t for t in self._entity_types if t['type'] == entityType ]
+
+        if not r:
+            raise ValueError('Could not find entity of type %s' % entityType)
+        else:
+            return r[0]['name']
+
+
     def get_entity_field_list(self, entityType):
         fields = self.get_entity_fields(entityType)
         return fields.keys()
