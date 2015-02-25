@@ -380,8 +380,16 @@ class Shotgun(object):
 
             sgRequests.append(request)
 
-        self._sg.batch(sgRequests)
+        sgResults = self._sg.batch(sgRequests)
 
+        results = []
+        for sgResult in sgResults:
+            if isinstance(sgResult, dict) and 'id' in sgResult and 'type' in sgResult:
+                results.append(Entity(self, sgResult['type'], sgResult))
+            else:
+                results.append(sgResult)
+
+        return results
 
 class Entity(object):
     def __init__(self, shotgun, entity_type, fields):
