@@ -274,26 +274,7 @@ class Shotgun(object):
 
         entityFields = self.get_entity_fields(entity.entity_type())
 
-        updateData = {}
-        for f in updateFields:
-            field = entity.field(f)
-            
-            # assume a list here
-            if entityFields[f]['data_type']['value'] in dataTypeList:
-                updateData[f] = []
-                for e in field:    
-                    if isinstance(e, Entity):
-                        updateData[f].append({
-                        'type': e['type'], 
-                        'id': e['id']})
-                    else:
-                        updateData[f].append(e)
-
-            else:
-                if isinstance(field, Entity):
-                    updateData[f] = {'type': field['type'], 'id': field['id']}
-                else:
-                    updateData[f] = field
+        updateData = self._translate_data(entityFields, updateFields)
         
         self._sg.update(entity._entity_type, entity._entity_id, updateData)
     
@@ -334,7 +315,6 @@ class Shotgun(object):
                         entity.commit()
     
     def create(self, entityType, **kwargs):
-        
         for e in self._entity_types:
             if entityType in [e['type'], e['name'], e['type_plural'], e['name_plural']]:
                 thisEntityType = e['type']
@@ -344,34 +324,127 @@ class Shotgun(object):
 
         entityFields = self.get_entity_fields(thisEntityType)
 
-        data = {}
-
-        for arg in kwargs:
-
-            if arg not in thisEntityFields:
-                continue
-            
-            # assume a list here
-            if entityFields[arg]['data_type']['value'] in dataTypeList:
-                data[arg] = []
-                for e in kwargs[arg]:    
-                    if isinstance(e, Entity):
-                        data[arg].append({
-                        'type': e['type'], 
-                        'id': e['id']})
-                    else:
-                        data[arg].append(e)
-
-            else:
-
-                if isinstance(kwargs[arg], Entity):
-                    data[arg] = {'type': kwargs[arg].entity_type(), 'id': kwargs[arg].entity_id()}
-                else:
-                    data[arg] = kwargs[arg]
+        data = self._translate_data(entityFields, kwargs)
         
         sgResult = self._sg.create(thisEntityType, data)
 
         return Entity(self, sgResult['type'], sgResult)
+
+    def _translate_data(self, entityFields, data):
+        """ Translate sw_wrapper data to shotgun data """
+        translatedData = {}
+
+        for arg in data:
+
+            if arg not in entityFields:
+                continue
+            
+            # assume a list here
+            if entityFields[arg]['data_type']['value'] in dataTypeList:
+                translatedData[arg] = []
+                for e in data[arg]:    
+                    if isinstance(e, Entity):
+                        translatedData[arg].append({
+                        'type': e['type'], 
+                        'id': e['id']})
+                    else:
+                        translatedData[arg].append(e)
+
+            else:
+
+                if isinstance(data[arg], Entity):
+                    translatedData[arg] = {'type': data[arg].entity_type(), 'id': data[arg].entity_id()}
+                else:
+                    translatedData[arg] = data[arg]
+
+        return translatedData
+
+    # def translateEDictToSGDict(self, dict_):
+    #     """ Translate a dict containing Entity to a dict containing Shotgun dict
+
+    #     Translation is done recursively
+
+    #     ..note:: Only list and dict are inspected
+
+    #     :param dict_: dict to translate
+    #     :type dict_: dict
+    #     :return: translated dict
+    #     :rtype: dict
+    #     """
+    #     newDict = {}
+    #     for key, value in dict_.items():
+    #         if isinstance(value, Entity):
+    #             newDict[key] = self.translateEntityToSGEntity(value)
+    #         elif isinstance(value, list):
+    #             newDict[key] = self.translateEListToSGList(value)
+    #         elif isinstance(value, dict):
+    #             newDict[key] = self.translateEDictToSGDict(value)
+    #         else:
+    #             newDict[key] = value
+
+    #     return newDict
+
+    # def translateEListToSGList(self, list_):
+    #     """ Translate a list containing Entity to a list containing Shotgun dict
+
+    #     Translation is done recursively
+
+    #     ..note:: Only list and dict are inspected
+
+    #     :param list_: list to translate
+    #     :type list_: list
+    #     :return: translated dict
+    #     :rtype: dict
+    #     """
+    #     newList = []
+    #     for element in list_:
+    #         if isinstance(element, Entity):
+    #             newList.append(self.translateEntityToSGEntity(element))
+    #         elif isinstance(element, list):
+    #             newList.append(self.translateEListToSGList(element))
+    #         elif isinstance(element, dict):
+    #             newList.append(self.translateEDictToSGDict(element))
+    #         else:
+    #             newList.append(element)
+
+    #     return newList
+
+    # def translateEntityToSGEntity(self, entity):
+    #     """ Translate an Entity to a Shotgun dict
+
+    #     Translation is done recursively
+
+    #     ..note:: Only list and dict are inspected
+
+    #     :param entity: entity to translate
+    #     :type entity: :class: Entity
+    #     :return: Shotgun dict
+    #     :rtype: dict
+    #     """
+    #     return self.translateEDictToSGDict(entity._fields)
+
+    def batch(self, requests):
+        """ Batch a list of Shotgun commands
+
+        :param requests: list of commands to execute
+        :type requests: list
+        """
+        sgRequests = []
+
+        for request in requests:
+            # Make sure entity_type is a real SG type
+            for e in self._entity_types:
+                if request['entity_type'] in [e['type'], e['name'], e['type_plural'], e['name_plural']]:
+                    request['entity_type'] = e['type']
+
+            # Translate sg_wrapper.Entity to SG dict
+            if 'data' in request:
+                entityFields = self.get_entity_fields(request['entity_type'])
+                request['data'] = self._translate_data(entityFields, request['data'])
+
+            sgRequests.append(request)
+
+        self._sg.batch(sgRequests)
 
 
 class Entity(object):
