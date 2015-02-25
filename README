@@ -67,6 +67,7 @@ pf = sgw.PublishedFiles(project=p, order=('desc', 'created_at'))
 
 create: asset = sgw.create('Asset', project=p, code='testAsset')
 upload: ve.upload('sg_uploaded_movie', movie) # ve: Version
+batch: sgw.batch(requests)
 
 - Published file path retrieval
 
