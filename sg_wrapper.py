@@ -403,7 +403,7 @@ class Shotgun(object):
     ##
     # pickle support
 
-    def _register_for_pickle(self, entity):
+    def _register_for_pickle(self, entity, entityCache):
 
         #_fields = {}
         entityType = entity['type']
@@ -424,7 +424,11 @@ class Shotgun(object):
                 del(entity['name'])
 
         # __init__ will call register_entity
-        Entity(self, entityType, fields=entity)        
+        e = Entity(self, entityType, fields=entity)        
+
+        # but we dont want to pollute original cache
+        del self._entities[entityType][entity['id']]
+        entityCache[entityType][entity['id']] = e
 
     def __getstate__(self):
        
@@ -457,7 +461,7 @@ class Shotgun(object):
                     entityFields = self.get_entity_fields(entityType)
                    
                     if entityFields[field]['data_type']['value'] == 'entity': 
-                        self._register_for_pickle(value)
+                        self._register_for_pickle(value, odict['_entities'])
                         
                     elif entityFields[field]['data_type']['value'] in dataTypeList:
                         for item in value:
@@ -467,7 +471,7 @@ class Shotgun(object):
                                 # schema_field_read will fail on type AppWelcome
                                 if item['type'] not in ['AppWelcome']:
                                     
-                                    self._register_for_pickle(item)
+                                    self._register_for_pickle(item, odict['_entities'])
 
         if '_sg' in odict:
             del odict['_sg']
