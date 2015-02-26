@@ -20,6 +20,32 @@ import os
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #sys.path.insert(0, os.path.abspath('.'))
 
+print 'adding...', os.path.abspath('../..')
+sys.path.insert(0, os.path.abspath('../..'))
+
+class MockX(object):
+ 
+    def __call__(self, *args, **kwargs):
+        return MockX()
+ 
+    @classmethod
+    def __getattr__(cls, name):
+        if name in ('__file__', '__path__'):
+            return os.devnull
+        elif name[0] == name[0].upper():
+            mockType = type(name, (object,), {})
+            mockType.__module__ = name
+            return mockType
+        else:
+            m = MockX()
+            return m
+ 
+MOCK_MODULES = ['shotgun_api3']
+for mod_name in MOCK_MODULES:
+    sys.modules[mod_name] = MockX()
+
+nitpicky = True
+
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
