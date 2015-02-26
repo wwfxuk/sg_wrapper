@@ -379,7 +379,10 @@ class Shotgun(object):
 
         :param requests: list of commands to execute
         :type requests: list
+        :return: list of results (Entity for create/update, bool for delete)
+        :rtype: list
         '''
+
         sgRequests = []
 
         for request in requests:
