@@ -51,15 +51,6 @@ dataTypeList = frozenset([
     'addressing'
     ])
 
-#
-#fieldMap = {
-        #'Sequence': {
-            #'name': 'code'},
-        #'Task': {
-            #'name': 'content'
-            #},
-        #}
-
 
 class ShotgunWrapperError(Exception):
     pass
@@ -318,7 +309,7 @@ class Shotgun(object):
         elif self.is_entity_plural(attrName):
             return find_multi_entity_wrapper
         
-        # pickle fix
+        # pickle fix (protocol 2)
         raise AttributeError('Could not get attribute %s' % attrName)
 
     def commit_all(self):
@@ -432,37 +423,13 @@ class Shotgun(object):
 
                 del(entity['name'])
 
-
-        #for k, v in entity.iteritems():
-
-            ## ie for an Asset, all tasks sub entities
-            ## have 'name' field instead of 'content'
-            ## so conform this...
-            #if k == 'name':
-                #if 'name' in validFields:
-                    #nk = 'name'
-                #elif 'code' in validFields:
-                    #nk = 'code'
-                #elif 'content' in validFields:
-                    #nk = 'content'
-                #else:
-                    #nk = ''
-            #else:
-                #nk = k
-
-            #if nk:
-                #_fields[nk] = v
-            
-        #Entity(self, entityType, fields=_fields)        
         # __init__ will call register_entity
         Entity(self, entityType, fields=entity)        
 
     def __getstate__(self):
        
         odict = self.__dict__.copy() # copy the dict since we change it
-
-        del odict['_sg']
-
+        
         _entities = odict['_entities'].copy() # copy dict as size might change
         
         # process all cached entities
@@ -502,6 +469,8 @@ class Shotgun(object):
                                     
                                     self._register_for_pickle(item)
 
+        if '_sg' in odict:
+            del odict['_sg']
 
         return odict
     
@@ -715,7 +684,7 @@ class Entity(object):
     def __getstate__(self):
         odict = self.__dict__.copy() # copy the dict since we change it
 
-        if '_shotgun' in odict:
+        if '_shotgun' in odict and '_sg' in odict['_shotgun'].__dict__:
 
             sg = odict['_shotgun']._sg
             convertUtc = sg.config.convert_datetimes_to_utc 
@@ -747,7 +716,7 @@ class Entity(object):
                
             odict['_fields'] = fieldsDict
 
-        if '_shotgun' in odict:
+        if '_shotgun' in odict and '_sg' in odict['_shotgun'].__dict__:
             
             # store shotgun config
             odict['_pickle_shotgun_convert_datetimes_to_utc'] = convertUtc
