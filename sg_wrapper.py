@@ -51,6 +51,16 @@ dataTypeList = frozenset([
     'addressing'
     ])
 
+#
+#fieldMap = {
+        #'Sequence': {
+            #'name': 'code'},
+        #'Task': {
+            #'name': 'content'
+            #},
+        #}
+
+
 class ShotgunWrapperError(Exception):
     pass
 
@@ -296,6 +306,7 @@ class Shotgun(object):
         self._entity_searches = []
     
     def __getattr__(self, attrName):
+
         def find_entity_wrapper(*args, **kwargs):
             return self.find_entity(attrName, find_one = True, *args, **kwargs)
 
@@ -306,7 +317,10 @@ class Shotgun(object):
             return find_entity_wrapper
         elif self.is_entity_plural(attrName):
             return find_multi_entity_wrapper
-    
+        
+        # pickle fix
+        raise AttributeError('Could not get attribute %s' % attrName)
+
     def commit_all(self):
         for entityType in self._entities:
             for entityId in self._entities[entityType]:
@@ -331,7 +345,7 @@ class Shotgun(object):
         return Entity(self, sgResult['type'], sgResult)
 
     def _translate_data(self, entityFields, data):
-        """ Translate sw_wrapper data to shotgun data """
+        ''' Translate sw_wrapper data to shotgun data '''
         translatedData = {}
 
         for arg in data:
@@ -353,18 +367,19 @@ class Shotgun(object):
             else:
 
                 if isinstance(data[arg], Entity):
-                    translatedData[arg] = {'type': data[arg].entity_type(), 'id': data[arg].entity_id()}
+                    translatedData[arg] = {'type': data[arg].entity_type(), 
+                            'id': data[arg].entity_id()}
                 else:
                     translatedData[arg] = data[arg]
 
         return translatedData
 
     def batch(self, requests):
-        """ Batch a list of Shotgun commands
+        ''' Batch a list of Shotgun commands
 
         :param requests: list of commands to execute
         :type requests: list
-        """
+        '''
         sgRequests = []
 
         for request in requests:
@@ -390,6 +405,107 @@ class Shotgun(object):
                 results.append(sgResult)
 
         return results
+    
+    ##
+    # pickle support
+
+    def _register_for_pickle(self, entity):
+
+        #_fields = {}
+        entityType = entity['type']
+        validFields = self.get_entity_fields(entity['type'])
+        
+        if 'name' in entity:
+
+            if 'name' not in validFields:
+
+                if 'code' in validFields:
+
+                    entity['code'] = entity['name']
+
+                elif 'content' in validFields:
+
+                    entity['content'] = entity['name']
+
+                del(entity['name'])
+
+
+        #for k, v in entity.iteritems():
+
+            ## ie for an Asset, all tasks sub entities
+            ## have 'name' field instead of 'content'
+            ## so conform this...
+            #if k == 'name':
+                #if 'name' in validFields:
+                    #nk = 'name'
+                #elif 'code' in validFields:
+                    #nk = 'code'
+                #elif 'content' in validFields:
+                    #nk = 'content'
+                #else:
+                    #nk = ''
+            #else:
+                #nk = k
+
+            #if nk:
+                #_fields[nk] = v
+            
+        #Entity(self, entityType, fields=_fields)        
+        # __init__ will call register_entity
+        Entity(self, entityType, fields=entity)        
+
+    def __getstate__(self):
+       
+        odict = self.__dict__.copy() # copy the dict since we change it
+
+        del odict['_sg']
+
+        _entities = odict['_entities'].copy() # copy dict as size might change
+        
+        # process all cached entities
+        # register sub entities (ie tasks for Asset or sg_sequence for Shot...)
+        # so after pickle we can access myShot.sg_sequence.code 
+
+        for entityType, entitiesDict in _entities.iteritems():
+
+            # fix publish file pickle
+            _entitiesDict = entitiesDict.copy()
+
+            for entityId, entity in _entitiesDict.iteritems():
+                
+                for field in entity.fields():
+
+                    if field in ['type', 'id']:
+                        continue
+
+                    value = entity._fields[field]
+
+                    if not value:
+                        # non retrieved fields
+                        continue
+
+                    entityFields = self.get_entity_fields(entityType)
+                   
+                    if entityFields[field]['data_type']['value'] == 'entity': 
+                        self._register_for_pickle(value)
+                        
+                    elif entityFields[field]['data_type']['value'] in dataTypeList:
+                        for item in value:
+                            if isinstance(item, dict) and 'id' in item and 'type' in item:
+                                #print item['type'], field, entity, entity['type'], entity['id']
+                                
+                                # schema_field_read will fail on type AppWelcome
+                                if item['type'] not in ['AppWelcome']:
+                                    
+                                    self._register_for_pickle(item)
+
+
+        return odict
+    
+    def __setstate__(self, adict):
+        
+        self.__dict__.update(adict)
+
 
 class Entity(object):
     def __init__(self, shotgun, entity_type, fields):
@@ -584,7 +700,7 @@ class Entity(object):
         ''' After unpickle, attach entity to a Shotgun connection
         '''
 
-        if hasattr(self, '_shotgun'):
+        if hasattr(self, '_shotgun') and '_sg' in self._shotgun.__dict__:
             return
 
         if isinstance(sg, Shotgun):
@@ -592,7 +708,7 @@ class Entity(object):
             self._shotgun.register_entity(self)
         else:
             raise RuntimeError('sg should be of type sg_wrapper.Shotgun not %s' % type(sg))
-    
+   
     def __getstate__(self):
         odict = self.__dict__.copy() # copy the dict since we change it
 
@@ -615,21 +731,26 @@ class Entity(object):
             fieldsDict = odict['_fields'].copy()
 
             for k in fieldsDict:
-                if isinstance(fieldsDict[k], datetime):
+
+                v = fieldsDict[k]
+
+                if isinstance(v, datetime):
                     
                     newDate = fieldsDict[k].astimezone(shotgun_api3.sg_timezone.utc)
                     # discard utc timezone (note that datetime objects are immutable)
                     newDate = newDate.replace(tzinfo=None)
 
                     fieldsDict[k] = newDate
-
+               
             odict['_fields'] = fieldsDict
 
         if '_shotgun' in odict:
             
             # store shotgun config
             odict['_pickle_shotgun_convert_datetimes_to_utc'] = convertUtc
-            del odict['_shotgun'] # remove shotgun entry
+            # do not remove _shotgun entry anymore as we will pickle it
+            # with entity (in order to keep cached entries) 
+            #del odict['_shotgun'] # remove shotgun entry
         
         return odict
 
