@@ -405,10 +405,13 @@ class Shotgun(object):
 
     def _register_for_pickle(self, entity, entityCache):
 
-        #_fields = {}
         entityType = entity['type']
         validFields = self.get_entity_fields(entity['type'])
         
+        if entityType in entityCache and entity['id'] in entityCache[entityType]:
+            # skip already registered entity'
+            return
+
         if 'name' in entity:
 
             if 'name' not in validFields:
@@ -424,7 +427,7 @@ class Shotgun(object):
                 del(entity['name'])
 
         # __init__ will call register_entity
-        e = Entity(self, entityType, fields=entity)        
+        e = Entity(self, entityType, fields=entity)
 
         # but we dont want to pollute original cache
         del self._entities[entityType][entity['id']]
@@ -435,7 +438,7 @@ class Shotgun(object):
         odict = self.__dict__.copy() # copy the dict since we change it
         
         _entities = odict['_entities'].copy() # copy dict as size might change
-        
+   
         # process all cached entities
         # register sub entities (ie tasks for Asset or sg_sequence for Shot...)
         # so after pickle we can access myShot.sg_sequence.code 
@@ -446,7 +449,7 @@ class Shotgun(object):
             _entitiesDict = entitiesDict.copy()
 
             for entityId, entity in _entitiesDict.iteritems():
-                
+               
                 for field in entity.fields():
 
                     if field in ['type', 'id']:
@@ -455,18 +458,20 @@ class Shotgun(object):
                     value = entity._fields[field]
 
                     if not value:
-                        # non retrieved fields
                         continue
 
                     entityFields = self.get_entity_fields(entityType)
                    
+                    # sg_wrapper can inject an 'entity' field so skip it...
+                    if field not in entityFields:
+                        continue
+
                     if entityFields[field]['data_type']['value'] == 'entity': 
                         self._register_for_pickle(value, odict['_entities'])
                         
                     elif entityFields[field]['data_type']['value'] in dataTypeList:
                         for item in value:
                             if isinstance(item, dict) and 'id' in item and 'type' in item:
-                                #print item['type'], field, entity, entity['type'], entity['id']
                                 
                                 # schema_field_read will fail on type AppWelcome
                                 if item['type'] not in ['AppWelcome']:
@@ -639,7 +644,7 @@ class Entity(object):
     def __getattr__(self, attrName):
         # Workaround to fix the attachment access to path fields problem.
         # Attachements are handle differently by SG as some fields
-        # are dynamic and not described in the schema making sw_wrapper
+        # are dynamic and not described in the schema making sg_wrapper
         # go wrong.
         if self._entity_type == 'Attachment':
             if attrName in self._fields:
