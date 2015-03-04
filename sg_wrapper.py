@@ -272,10 +272,13 @@ class Shotgun(object):
         return self._sg.find(entityType, filters, fields, order)
     
     def update(self, entity, updateFields):
-
         entityFields = self.get_entity_fields(entity.entity_type())
 
-        updateData = self._translate_data(entityFields, updateFields)
+        data = {}
+        for f in updateFields:
+            data[f] = entity.field(f)
+
+        updateData = self._translate_data(entityFields, data)
         
         self._sg.update(entity._entity_type, entity._entity_id, updateData)
     
