@@ -268,7 +268,6 @@ class Shotgun(object):
         return self._sg.find_one(entityType, filters, fields, order)
 
     def sg_find(self, entityType, filters, fields, order=None):
-        #print order
         return self._sg.find(entityType, filters, fields, order)
     
     def update(self, entity, updateFields):
