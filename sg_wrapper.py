@@ -69,6 +69,7 @@ class Shotgun(object):
             self._sg = shotgun_api3.Shotgun(sgServer, sgScriptName, sgScriptKey, **kwargs)
         else:
             raise RuntimeError('init requires a shotgun object or server, script name and key')
+
         self._entity_types = self.get_entity_list()
         self._entity_fields = {}
         self._entities = {}
@@ -472,7 +473,7 @@ class Shotgun(object):
                     if field not in entityFields:
                         continue
 
-                    if entityFields[field]['data_type']['value'] == 'entity': 
+                    if entityFields[field]['data_type']['value'] == 'entity' and not isinstance(value, Entity): 
                         self._register_for_pickle(value, odict['_entities'])
                         
                     elif entityFields[field]['data_type']['value'] in dataTypeList:
