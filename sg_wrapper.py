@@ -272,15 +272,29 @@ class Shotgun(object):
         return self._sg.find(entityType, filters, fields, order)
     
     def update(self, entity, updateFields):
-        entityFields = self.get_entity_fields(entity.entity_type())
 
-        data = {}
-        for f in updateFields:
-            data[f] = entity.field(f)
+        if type(updateFields) is dict:
+            entityFields = self.get_entity_fields(entity.entity_type())
+            updateData = self._translate_data(entityFields, updateFields)
+            self._sg.update(entity._entity_type, entity._entity_id, updateData)
 
-        updateData = self._translate_data(entityFields, data)
-        
-        self._sg.update(entity._entity_type, entity._entity_id, updateData)
+        elif type(udpateFields) is list:
+            print('Warning: sg_wrapper shotgun.update using a field list is deprecated')
+
+            entityFields = self.get_entity_fields(entity.entity_type())
+
+            data = {}
+            for f in updateFields:
+                data[f] = entity.field(f)
+
+            updateData = self._translate_data(entityFields, data)
+
+            self._sg.update(entity._entity_type, entity._entity_id, updateData)
+
+        else:
+            raise ValueError('Field type not supported: %s' % type(mode))
+
+
     
     def register_entity(self, entity):
         if entity._entity_type not in self._entities:
