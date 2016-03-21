@@ -31,7 +31,7 @@ Another way is to send an email at <syd@mikrosimage.eu> or <jbro@mikrosimage.eu>
 Changes
 -------
 
-See the :doc:`changelog` for a full list of changes.
+See the :doc:`changeLogApi` for a full list of changes.
 
 Contributions
 -------------

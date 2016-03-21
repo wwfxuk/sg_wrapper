@@ -272,6 +272,21 @@ class Shotgun(object):
         return self._sg.find(entityType, filters, fields, order)
     
     def update(self, entity, updateFields):
+        ''' Update entity fields
+
+        :param entity: entity to update
+        :type entity: :class:`~sg_wrapper.Entity`
+        :param updateFields: entity fields to update
+        :type updateFields: list or dict
+
+        :return: Nothing
+        :rtype: None
+
+        :raises ValueError: if updateFields is neither a list nor a dict
+
+        .. note:: If updateFields is a list of field names, the values will be the values stored
+                  in the entity yet to be commited
+        '''
 
         if type(updateFields) is dict:
             entityFields = self.get_entity_fields(entity.entity_type())
