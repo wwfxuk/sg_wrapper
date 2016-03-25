@@ -75,7 +75,7 @@ class Shotgun(object):
         self._entities = {}
         self._entity_searches = []
 
-        self.updateAuthInfo(sgScriptName)
+        self.update_auth_info(sgScriptName)
 
     def pluralise(self, name):
         if name in customPlural:
@@ -311,7 +311,7 @@ class Shotgun(object):
         else:
             raise ValueError('Field type not supported: %s' % type(updateFields))
 
-    def getNewShotgunAuthInfo(self, scriptName=''):
+    def get_new_shotgun_auth_info(self, scriptName=''):
         ''' Get updated shotgun's auth info for the current script
 
         :param scriptName: The name of the current script
@@ -320,13 +320,13 @@ class Shotgun(object):
         :return: The script name and its API key, or (None,None) if there was a problem creating / retrieving the auth infos.
         :rtype: (str,str)
 
-        .. note:: If no script name is provided, it is guessed by analysing the stack trace (cf getCallingScript)
+        .. note:: If no script name is provided, it is guessed by analysing the stack trace (cf get_calling_script)
 
         .. note:: Use the returned script name in any case instead of the provided one: the shotgun's search is case insensitive while the auth is not
         '''
 
         if not scriptName:
-            scriptName = getCallingScript()
+            scriptName = get_calling_script()
             if not scriptName:
                 return (None, None)
 
@@ -351,7 +351,7 @@ class Shotgun(object):
 
         return (scriptName, apiKey)
 
-    def updateAuthInfo(self, scriptName=None):
+    def update_auth_info(self, scriptName=None):
         ''' Update the script name, the api key and the session_uuid of this shotgun instance
 
         :param scriptName: The name of the current script
@@ -360,7 +360,7 @@ class Shotgun(object):
         :return: True iff the new script name and api key were properly retrieved
         :rtype: bool
 
-        .. note:: If no script name is provided, it is guessed by analysing the stack trace (cf getCallingScript)
+        .. note:: If no script name is provided, it is guessed by analysing the stack trace (cf get_calling_script)
 
         .. note:: session_uuid is used to store the current user name, encoded as a valid UUID
         '''
@@ -368,13 +368,13 @@ class Shotgun(object):
         # add current user to the shotgun handle:
         #   the only field available (for now - @FUTURE) is the session uuid
         #   so we convert the current user to a valid uuid
-        # use sg_wrapper.Shotgun.uuidToString(uuid) to retrieve the username from a session uuid
+        # use sg_wrapper.Shotgun.uuid_to_string(uuid) to retrieve the username from a session uuid
 
         from getpass import getuser
-        self._sg.set_session_uuid( stringToUUID( getuser() ) )
+        self._sg.set_session_uuid( string_to_uuid( getuser() ) )
 
         scriptName = scriptName
-        name, key = self.getNewShotgunAuthInfo(scriptName)
+        name, key = self.get_new_shotgun_auth_info(scriptName)
 
         if name is not None and key is not None:
             self._sg.config.script_name = name
@@ -383,7 +383,7 @@ class Shotgun(object):
 
         return False
 
-    def updateTankAuth(self, tk):
+    def update_tank_auth(self, tk):
         ''' Bind tank's shotgun handle auth config to this shotgun instance.
             This concern the script name, the api key and the username as an uuid
 
@@ -398,7 +398,7 @@ class Shotgun(object):
         tk.shotgun.config.api_key = self._sg.config.api_key
         tk.shotgun.set_session_uuid(self._sg.config.session_uuid)
 
-    def getUserFromEvent(self, eventId):
+    def get_user_from_event(self, eventId):
         ''' Get the user that called the script causing an event
 
         :param eventId: The id of the event the user must be retrieve from
@@ -421,7 +421,7 @@ class Shotgun(object):
             print 'Unable to retrieve the user from the EventLogEntry %s' % eventId
             return None
 
-        return uuidToString(_uuid)
+        return uuid_to_string(_uuid)
 
     def register_entity(self, entity):
         if entity._entity_type not in self._entities:
@@ -905,7 +905,7 @@ class Entity(object):
         self.__dict__.update(adict)
         
 
-def getCallingScript():
+def get_calling_script():
     ''' Retrieve the calling script name by exploring the stack.
         The following frames in the stack are ignored:
             * the parents of the frame called by __load_apps
@@ -929,9 +929,9 @@ def getCallingScript():
 
     # find the last frame from a proper package
 
-    convertedStack = map(lambda frame: getScriptNameFromFrame(frame), _stack)
+    convertedStack = map(lambda frame: get_script_name_from_frame(frame), _stack)
 
-    # cut everything after the first 'recurs_ignore' encountered - cf getScriptNameFromFrame
+    # cut everything after the first 'recurs_ignore' encountered - cf get_script_name_from_frame
     cut = len(convertedStack)
     for i in range(len(convertedStack)):
         if convertedStack[i] == (None, 'recurs_ignore'):
@@ -967,7 +967,7 @@ def getCallingScript():
     # TODO throw exception ? or default script name
     return None
 
-def getScriptNameFromFrame(frame):
+def get_script_name_from_frame(frame):
     ''' Return the filename and the package name of a frame, or (None,None) if it should be ignored.
         The following frames in the stack are ignored:
             * the parents of the frame called by __load_apps
@@ -1017,8 +1017,8 @@ def getScriptNameFromFrame(frame):
 
     return (nameWithoutExtension, None)
 
-def stringToUUID(_string):
-    ''' Return an UUID string based on the input. Opposite of uuidToString.
+def string_to_uuid(_string):
+    ''' Return an UUID string based on the input. Opposite of uuid_to_string.
 
     :param _string: string to encoded
     :type _string: str
@@ -1049,8 +1049,8 @@ def stringToUUID(_string):
                                                           _hex[18:30],
                                                           y='b' if isTruncated else 'a')
 
-def uuidToString(_uuid):
-    ''' Extract a string from an UUID. Opposite of stringToUUID.
+def uuid_to_string(_uuid):
+    ''' Extract a string from an UUID. Opposite of string_to_uuid.
 
     :param _uuid: UUID to extract the string from
     :type _uuid: str
