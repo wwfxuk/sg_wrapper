@@ -7,4 +7,9 @@ Releases
 Version dev
 ```````````
 
-* New sgw.update behaviour: if a dict is provided instead of a list, update the entity fields according to the dict values
+- New sgw.update behaviour: if a dict is provided instead of a list, update the entity fields according to the dict values
+- sg_wrapper.Shotgun automatically retrieve the api key if a script name is provided
+- sg_wrapper.Shotgun modifies the shotgun_api3 instance if it was provided:
+  - it replaces session_uuid with the current username as an uuid
+  - if no script name was provided, it guesses it from the stack trace and update the script name and the api key to match it
+- sgw.get_user_from_event(eventId) allows one to retrieve the username from an event
