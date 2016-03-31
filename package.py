@@ -19,4 +19,9 @@ custom = {
 
 def commands():
 
+    import os
+
     env.PYTHONPATH.append('{root}')
+
+    alias('userFromEvent', os.path.join(this.root, 'scripts', 'userFromEvent.py'))
+    alias('evusr', 'userFromEvent')
