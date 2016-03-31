@@ -14,6 +14,9 @@ def get_calling_script():
             * The name of its file, if the commandline first argument (ie the script name) is equal to its file. This allows to get the script name instead of the package name if it was called from a script.
             * The name of the package containing its file, if any was found
             * The name of its file
+
+        >>> get_calling_script()
+        'pythonStandalone'
     '''
 
     from inspect import stack
@@ -182,6 +185,12 @@ def string_to_uuid(_string):
 
     :return: _string encoded as an UUID string
     :rtype: str
+
+    >>> string_to_uuid('doctest')
+    '646f6374-6573-4740-a000-000000000000'
+    >>> string_to_uuid('doctestwayyyyytolong')
+    Warning: only the 15 first character of doctestwayyyyytolong (doctestwayyyyyt) will be encoded as an UUID
+    '646f6374-6573-4747-b761-797979797974'
     '''
 
     # uuid version 4 :
@@ -217,6 +226,12 @@ def uuid_to_string(_uuid):
 
     :raise:
         ValueError if the UUID not valid
+
+    >>> uuid_to_string('646f6374-6573-4740-a000-000000000000')
+    'doctest'
+    >>> uuid_to_string('646f6374-6573-4747-b761-797979797974')
+    Warning: 646f6374-6573-4747-b761-797979797974 only encoded part of a string
+    'doctestwayyyyyt'
     '''
 
     # uuid version 4 :
