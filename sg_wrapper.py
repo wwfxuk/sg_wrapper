@@ -61,7 +61,7 @@ class ShotgunWrapperError(Exception):
 class Shotgun(object):
     
     def __init__(self, sgServer='', sgScriptName='', 
-            sgScriptKey='', sg=None, **kwargs):
+            sgScriptKey='', sg=None, disableApiAuthOverride=False, **kwargs):
         
         if sg:
             self._sg = sg
@@ -75,7 +75,10 @@ class Shotgun(object):
         self._entities = {}
         self._entity_searches = []
 
-        self.update_auth_info(sgScriptName)
+        self.update_user_info()
+
+        if not disableApiAuthOverride:
+            self.update_auth_info(sgScriptName)
 
     def pluralise(self, name):
         if name in customPlural:
@@ -354,22 +357,10 @@ class Shotgun(object):
         scriptName = scriptEntity['firstname']  # retrieve the script name because the 'is' query is case insensitive, but the auth is not
         apiKey = scriptEntity['salted_password']
 
-        print("Shotgun's script API name is now: %s" % scriptName)
-
         return (scriptName, apiKey)
 
-    def update_auth_info(self, scriptName=None):
-        ''' Update the script name, the api key and the session_uuid of this shotgun instance
-
-        :param scriptName: The name of the current script
-        :type scriptName: str
-
-        :return: True iff the new script name and api key were properly retrieved
-        :rtype: bool
-
-        .. note:: If no script name is provided, it is guessed by analysing the stack trace (cf get_calling_script)
-
-        .. note:: session_uuid is used to store the current user name, encoded as a valid UUID
+    def update_user_info(self):
+        ''' Store the current user in the session_uuid field of this shotgun instance
         '''
 
         # add current user to the shotgun handle:
@@ -380,12 +371,24 @@ class Shotgun(object):
         from getpass import getuser
         self._sg.set_session_uuid( string_to_uuid( getuser() ) )
 
-        scriptName = scriptName
+    def update_auth_info(self, scriptName=None):
+        ''' Update the script name and the api key of this shotgun instance
+
+        :param scriptName: The name of the current script
+        :type scriptName: str
+
+        :return: True iff the new script name and api key were properly retrieved
+        :rtype: bool
+
+        .. note:: If no script name is provided, it is guessed by analysing the stack trace (cf get_calling_script)
+        '''
+
         name, key = self.get_new_shotgun_auth_info(scriptName)
 
         if name is not None and key is not None:
             self._sg.config.script_name = name
             self._sg.config.api_key = key
+            print("Shotgun's script API name is now: %s" % name)
             return True
 
         return False
