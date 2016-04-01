@@ -12,4 +12,5 @@ Version dev
 - sg_wrapper.Shotgun modifies the shotgun_api3 instance if it was provided:
   - it replaces session_uuid with the current username as an uuid
   - if no script name was provided, it guesses it from the stack trace and update the script name and the api key to match it
-- sgw.get_user_from_event(eventId) allows one to retrieve the username from an event
+- sg_wrapper_util.get_user_from_event(eventId) allows one to retrieve the username from an event
+- userFromEvent script allows to retrieve the user infos from a shotgun event

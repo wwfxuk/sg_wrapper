@@ -73,6 +73,10 @@ batch: sgw.batch(requests)
 
 pf.path.local_path
 
+- Event log entry blame
+
+sg_wrapper_util.get_user_from_event(eventId)
+
 - Misc
 
 Support fields of type multi_entity
