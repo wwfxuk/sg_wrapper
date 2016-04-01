@@ -307,7 +307,7 @@ class Shotgun(object):
             self._sg.update(entity._entity_type, entity._entity_id, updateData)
 
         else:
-            raise ValueError('Field type not supported: %s' % type(mode))
+            raise ValueError('Field type not supported: %s' % type(updateFields))
 
 
     
