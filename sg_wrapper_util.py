@@ -1,4 +1,5 @@
 import os
+import warnings
 
 def get_calling_script():
     ''' Retrieve the calling script name by exploring the stack.
@@ -166,13 +167,13 @@ def get_user_from_event(eventId, sgw=None):
     _uuid = ev['session_uuid']
 
     if _uuid is None:
-        print 'Unable to retrieve the user from the EventLogEntry %s' % eventId
+        warnings.warn('Unable to retrieve the user from the EventLogEntry %s' % eventId)
         return None
 
     try:
         username = uuid_to_string(_uuid)
     except ValueError:
-        print 'Unable to retrieve the user from the EventLogEntry %s' % eventId
+        warnings.warn('Unable to retrieve the user from the EventLogEntry %s' % eventId)
         return None
 
     return username
@@ -188,8 +189,8 @@ def string_to_uuid(_string):
 
     >>> string_to_uuid('doctest')
     '646f6374-6573-4740-a000-000000000000'
+    >>> warnings.simplefilter('ignore')  # disable warnings, to not display the truncated-string message
     >>> string_to_uuid('doctestwayyyyytolong')
-    Warning: only the 15 first character of doctestwayyyyytolong (doctestwayyyyyt) will be encoded as an UUID
     '646f6374-6573-4747-b761-797979797974'
     '''
 
@@ -204,7 +205,7 @@ def string_to_uuid(_string):
 
     isTruncated = len(_hex) > 30
     if isTruncated:
-        print('Warning: only the 15 first character of %s (%s) will be encoded as an UUID'
+        warnings.warn('Warning: only the 15 first character of %s (%s) will be encoded as an UUID'
               % (_string, _string[:15]))
 
     return '{:0<8}-{:0<4}-4{:0<3}-{y}{:0<3}-{:0<12}'.format(
@@ -229,8 +230,8 @@ def uuid_to_string(_uuid):
 
     >>> uuid_to_string('646f6374-6573-4740-a000-000000000000')
     'doctest'
+    >>> warnings.simplefilter('ignore')  # disable warnings, to not display the truncated-string message
     >>> uuid_to_string('646f6374-6573-4747-b761-797979797974')
-    Warning: 646f6374-6573-4747-b761-797979797974 only encoded part of a string
     'doctestwayyyyyt'
     '''
 
@@ -255,6 +256,6 @@ def uuid_to_string(_uuid):
         raise ValueError('Could not extract a string from the non valid UUID %s' % _uuid)
 
     if _uuid[19] == 'b':
-        print('Warning: %s only encoded part of a string' % _uuid)
+        warnings.warn('Warning: %s only encoded part of a string' % _uuid)
 
     return _hex.decode('hex').rstrip('\x00')
