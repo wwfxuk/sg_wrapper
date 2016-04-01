@@ -114,7 +114,7 @@ def get_script_name_from_frame(frame):
 
     return (nameWithoutExtension, None)
 
-def get_user_from_event(eventId, sgw=None):
+def get_user_from_event(eventId, sgw=None, onlyUsername=True):
     ''' Get the user that called the script causing an event
 
     :param eventId: The id of the event the user must be retrieve from
@@ -123,11 +123,14 @@ def get_user_from_event(eventId, sgw=None):
         sg_wrapper handle.
         If none is provided, the scripts tries to instantiate one.
     :type sgw: sg_wrapper.Shotgun
+    :param onlyUsername: Only retrieves the username. If false, returns the user's sg_wrapper.Entity
+    :type onlyUsername: bool
 
     :return:
         The username of the user who called the script causing this event
-        or None if it could not be retrieved
-    :rtype: str
+        or None if it could not be retrieved.
+        If onlyUsername is false, returns the sg_wrapper.Entity of the user, if found
+    :rtype: str or sg_wrapper.Entity
 
     :raise:
         ValueError: if the event doesn't exist
@@ -176,7 +179,15 @@ def get_user_from_event(eventId, sgw=None):
         warnings.warn('Unable to retrieve the user from the EventLogEntry %s' % eventId)
         return None
 
-    return username
+    if onlyUsername:
+        return username
+
+    user = sgw.find_entity('HumanUser', username)
+
+    if user is None:
+        raise RuntimeError('Could not find HumanUser with login == %s' % username)
+
+    return user
 
 def string_to_uuid(_string):
     ''' Return an UUID string based on the input. Opposite of uuid_to_string.
