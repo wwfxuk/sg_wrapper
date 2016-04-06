@@ -300,7 +300,7 @@ class Shotgun(object):
             updateData = self._translate_data(entityFields, updateFields)
             self._sg.update(entity._entity_type, entity._entity_id, updateData)
 
-        elif type(udpateFields) is list:
+        elif type(updateFields) is list:
             print('Warning: sg_wrapper shotgun.update using a field list is deprecated')
 
             entityFields = self.get_entity_fields(entity.entity_type())
