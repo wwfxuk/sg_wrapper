@@ -70,7 +70,7 @@ def get_script_name_from_frame(frame):
         The following frames in the stack are ignored:
             * the parents of the frame called by __load_apps
             * the frame initialized by <stdin> (ie python commandline)
-            * the frame initialized by */IPython/* (ie ipython commandline)
+            * the frame initialized by */IPython/* or *Ipython-input* (ie ipython commandline)
 
         :param frame: frame to retrieve the info from
         :type frame: frame
@@ -93,7 +93,8 @@ def get_script_name_from_frame(frame):
 
     # ignore ipython & python commandline frame
     if(path.startswith('python')
-            or '/ipython/' in path
+            or '/ipython/' in path.lower()
+            or 'ipython-input' in path.lower()
             or '<stdin>' == path):
         return (None, None)
 
