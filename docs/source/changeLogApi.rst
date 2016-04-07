@@ -6,6 +6,16 @@ Releases
 
 Version dev
 ```````````
+- sg_wrapper_util.get_calling_script: Ignore ipython from the stacktrace
+
+
+Version rc-1.3.1
+````````````````
+- sg_wrapper.Shotgun.update: fixed typo
+
+
+Version rc-1.3
+``````````````
 
 - New sgw.update behaviour: if a dict is provided instead of a list, update the entity fields according to the dict values
 - sg_wrapper.Shotgun automatically retrieve the api key if a script name is provided
