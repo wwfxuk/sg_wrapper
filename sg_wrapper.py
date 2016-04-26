@@ -706,7 +706,7 @@ class Entity(object):
         self.set_field(itemName, value)
     
     def upload(self, field, path, displayName=None, tagList=None):
-        """ Uploads local file and links it with current entity
+        ''' Uploads local file and links it with current entity
 
         :param field: field's name in entity. Must be a File/Link field
         :type field: str
@@ -716,7 +716,7 @@ class Entity(object):
         :type displayName: str
         :param tagList: optional tags (comma separated str of tags)
         :type tagList: str
-        """
+        '''
         self._shotgun._sg.upload(self.entity_type(), self.entity_id(), path, field, displayName, tagList)
     
     # 'partial' pickle support
