@@ -705,8 +705,8 @@ class Entity(object):
     def __setitem__(self, itemName, value):
         self.set_field(itemName, value)
     
-    def upload(self, field, path):
-        self._shotgun._sg.upload(self.entity_type(), self.entity_id(), path, field)
+    def upload(self, field, path, displayName=None):
+        self._shotgun._sg.upload(self.entity_type(), self.entity_id(), path, field, displayName)
     
     # 'partial' pickle support
     # limitations: could not pickle and unpickle if convert_datetimes_to_utc parameter (see Shotgun api) is not the same 
