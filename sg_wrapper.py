@@ -174,14 +174,14 @@ class Shotgun(object):
                     # in cached entity fields
                     if set(fields) <= set(entity.fields()):
                         # from cache ...
-                        return entity
+                        return entity if find_one else [entity]
                     else:
                         # remove entity from cache 
                         # it will be added again after the new query
                         self.unregister_entity(entity)
                 else:
                     # from cache ...
-                    return entity
+                    return entity if find_one else [entity]
 
         if not fields:
             fields = self.get_entity_field_list(thisEntityType)
