@@ -805,8 +805,19 @@ class Entity(object):
     def __setitem__(self, itemName, value):
         self.set_field(itemName, value)
     
-    def upload(self, field, path):
-        self._shotgun._sg.upload(self.entity_type(), self.entity_id(), path, field)
+    def upload(self, field, path, displayName=None, tagList=None):
+        ''' Uploads local file and links it with current entity
+
+        :param field: field's name in entity. Must be a File/Link field
+        :type field: str
+        :param path: full path of local file
+        :type path: str
+        :param displayName: optional displayed name, if None, Shotgun will names it with his local name
+        :type displayName: str
+        :param tagList: optional tags (comma separated str of tags)
+        :type tagList: str
+        '''
+        self._shotgun._sg.upload(self.entity_type(), self.entity_id(), path, field, displayName, tagList)
     
     # 'partial' pickle support
     # limitations: could not pickle and unpickle if convert_datetimes_to_utc parameter (see Shotgun api) is not the same 
