@@ -1,5 +1,5 @@
 name = 'sg_wrapper'
-version = '0.0.0.mikros.2.0'
+version = '0.0.0.mikros.1.3.3'
 
 requires = ['shotgunPythonApi']
 
@@ -19,4 +19,9 @@ custom = {
 
 def commands():
 
+    import os
+
     env.PYTHONPATH.append('{root}')
+
+    alias('userFromEvent', os.path.join(this.root, 'scripts', 'userFromEvent.py'))
+    alias('evusr', 'userFromEvent')
