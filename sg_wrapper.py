@@ -392,6 +392,8 @@ class Shotgun(object):
             self._sg.config.script_name = name
             self._sg.config.api_key = key
             print("Shotgun's script API name is now: %s" % name)
+            from traceback import print_stack
+            print_stack()
             return True
 
         return False
