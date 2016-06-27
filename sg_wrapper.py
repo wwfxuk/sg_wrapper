@@ -1,3 +1,5 @@
+import copy
+
 import shotgun_api3
 
 from sg_wrapper_util import string_to_uuid, get_calling_script
@@ -137,6 +139,39 @@ class Shotgun(object):
                 return True
         return False
     
+    def get_real_type(self, entityType, defaults_to_paramater=False):
+        ''' Translate given type to the real shotgun type (ie Cut => CustomEntity23)
+        '''
+        for e in self._entity_types:
+            if entityType in [e['type'], e['name'], e['type_plural'], e['name_plural']]:
+                return e['type']
+
+        if defaults_to_paramater:
+            return entityType
+        else:
+            return None
+
+    def get_entity_description(self, entity):
+
+        if isinstance(entity, Entity):
+            return {'type': entity.entity_type(), 'id': entity.entity_id()}
+
+        elif isinstance(entity, dict):
+            # if dict represent an entity (ie contains at least id & type), convert type if its an alias to the real name (ex: CustomEntity21 => Editing)
+            argType = entity.get('type')
+            if argType and 'id' in entity:
+                real_type = self.get_real_type(argType)
+                if real_type:
+                    newarg = copy.deepcopy(entity)
+                    newarg['type'] = real_type
+                    return newarg
+
+        elif isinstance(entity, list):
+            return [self.get_entity_description(e) for e in entity]
+
+        return entity
+
+
     def find_entity(self, entityType, key = None, find_one = True, fields = None,
             order=None, exclude_fields = None, **kwargs):
         filters = {}
@@ -165,10 +200,7 @@ class Shotgun(object):
                     raise ShotgunWrapperError("Entity type '%s' does not have one of the defined primary keys(%s)." % (entityType, ", ".join(primaryTextKeys)))
         
         for arg in kwargs:
-            if isinstance(kwargs[arg], Entity):
-                filters[arg] = {'type': kwargs[arg].entity_type(), 'id': kwargs[arg].entity_id()}
-            else:
-                filters[arg] = kwargs[arg]
+            filters[arg] = self.get_entity_description(kwargs[arg])
 
         entities_from_cache = []
         if 'id' in filters and len(filters) == 1:  # only fetch from cache if no other filters were specified
@@ -251,11 +283,8 @@ class Shotgun(object):
             filterValue = filters[f]
             if isinstance(filterValue, tuple):
                 op = filterValue[0]
-                value = filterValue[1]
-                
-                if isinstance(value, Entity):
-                    value = {'type': value.entity_type(), 'id': value.entity_id()}
-                
+                value = self.get_entity_description(filterValue[1])
+
                 if op not in baseOperator:
                     _op = op
                     op = operatorMap.get(_op, None)
