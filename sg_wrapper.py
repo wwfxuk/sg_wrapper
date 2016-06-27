@@ -169,30 +169,52 @@ class Shotgun(object):
                 filters[arg] = {'type': kwargs[arg].entity_type(), 'id': kwargs[arg].entity_id()}
             else:
                 filters[arg] = kwargs[arg]
-        
-        if 'id' in filters:
-            if thisEntityType in self._entities and filters['id'] in self._entities[thisEntityType]:
-                
-                entity = self._entities[thisEntityType][filters['id']]
 
-                if fields: 
-                    
-                    # check all required fields are already 
-                    # in cached entity fields
-                    if set(fields) <= set(entity.fields()):
-                        # from cache ...
-                        return entity
-                    else:
-                        # remove entity from cache 
-                        # it will be added again after the new query
-                        self.unregister_entity(entity)
-                else:
-                    # from cache ...
-                    return entity
+        entities_from_cache = []
+        if 'id' in filters and len(filters) == 1:  # only fetch from cache if no other filters were specified
+            if thisEntityType in self._entities:
+
+                if not isinstance(filters['id'], tuple):
+                    filters['id'] = ('is', filters['id'])
+
+                op = filters['id'][0]
+                value = filters['id'][1]
+
+                if op == 'is':
+                    op = 'in'
+                    value = [value]
+                    filters['id'] = (op, value)
+
+                if op == 'in':
+                    missing_value_from_cache = []
+                    for val in value:
+                        if val in self._entities[thisEntityType]:
+                            entity = self._entities[thisEntityType][val]
+
+                            if fields and not(set(fields) <= set(entity.fields())):
+                                    # remove entity from cache
+                                    # it will be added again after the new query
+                                    self.unregister_entity(entity)
+                                    missing_value_from_cache.append(val)
+
+                            else:  # found in cache
+
+                                if find_one:
+                                    return entity
+                                entities_from_cache.append(entity)
+                        else:
+                            missing_value_from_cache.append(val)
+
+                    if not missing_value_from_cache:
+                        return entities_from_cache
+
+                    # not everything has been found: prune found values & search for the rest
+                    filters['id'] = (op, missing_value_from_cache)
+
 
         if not fields:
             fields = self.get_entity_field_list(thisEntityType)
-        
+
         if exclude_fields:
             for f in exclude_fields:
                 if f in fields:
@@ -259,6 +281,8 @@ class Shotgun(object):
             result = []
             for sg_result in sg_results:
                 result.append(Entity(self, thisEntityType, sg_result))
+
+            result.extend(entities_from_cache)
 
         thisSearch = {}
         thisSearch['find_one'] = find_one
