@@ -65,7 +65,7 @@ class ShotgunWrapperError(Exception):
 class Shotgun(object):
 
     def __init__(self, sgServer='', sgScriptName='',
-            sgScriptKey='', sg=None, disableApiAuthOverride=False, **kwargs):
+            sgScriptKey='', sg=None, disableApiAuthOverride=False, printInfo=True, **kwargs):
 
         if sg:
             self._sg = sg
@@ -82,7 +82,7 @@ class Shotgun(object):
         self.update_user_info()
 
         if not disableApiAuthOverride:
-            self.update_auth_info(sgScriptName)
+            self.update_auth_info(sgScriptName, printInfo=printInfo)
 
     def pluralise(self, name):
         if name in customPlural:
@@ -427,7 +427,7 @@ class Shotgun(object):
         from getpass import getuser
         self._sg.set_session_uuid( string_to_uuid( getuser() ) )
 
-    def update_auth_info(self, scriptName=None):
+    def update_auth_info(self, scriptName=None, printInfo=True):
         ''' Update the script name and the api key of this shotgun instance
 
         :param scriptName: The name of the current script
@@ -444,7 +444,8 @@ class Shotgun(object):
         if name is not None and key is not None:
             self._sg.config.script_name = name
             self._sg.config.api_key = key
-            print("Shotgun's script API name is now: %s" % name)
+            if printInfo:
+                print("Shotgun's script API name is now: %s" % name)
             return True
 
         return False
