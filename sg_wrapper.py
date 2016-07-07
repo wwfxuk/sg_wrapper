@@ -1,7 +1,9 @@
 import copy
 import os
+import operator
 
 import shotgun_api3
+from carbine import carbine
 
 from sg_wrapper_util import string_to_uuid, get_calling_script
 
@@ -63,6 +65,38 @@ if os.getenv('PROD_TYPE', 'anim') == 'anim':
     ]
 else:
     ignoredTables = []
+
+
+# translation between baseOperators & peewee syntax - for carbine
+# returns a comparator
+# TODO: every commented filters
+# shotgun filters: https://github.com/shotgunsoftware/python-api/wiki/Reference%3A-Filter-Syntax
+# peewee query operators: http://docs.peewee-orm.com/en/latest/peewee/querying.html#query-operators
+operatorTranslation = {
+    'is': lambda x, y: x == y,
+    'is_not': operator.ne,
+    'less_than': operator.lt,
+    'greater_than': operator.gt,
+    'contains': lambda x, y: x.contains(y),
+    'not_contains': lambda x, y: ~(x.contains(y)),
+    'starts_with': lambda x, y: x.startswith(y),
+    'ends_with': lambda x, y: x.endswith(y),
+    'between': lambda x, y: x.between(y[0], y[1]),
+    'not_between': lambda x, y: ~(x.between(y[0], y[1])),
+    # 'in_last',
+    # 'in_next',
+    'in': operator.lshift,
+    'not_in': lambda x, y: ~(x << y),
+    # 'type_is',
+    # 'type_is_not',
+    # 'in_calendar_day',
+    # 'in_calendar_week',
+    # 'in_calendar_month',
+    # 'name_contains',
+    # 'name_not_contains',
+    # 'name_starts_with',
+    # 'name_ends_with',
+}
 
 
 class ShotgunWrapperError(Exception):
@@ -337,10 +371,114 @@ class Shotgun(object):
         return result
 
     def sg_find_one(self, entityType, filters, fields, order=None):
-        return self._sg.find_one(entityType, filters, fields, order)
+        return self.carbine_find(entityType, filters, fields, order, find_one=True)
+        # return self._sg.find_one(entityType, filters, fields, order)
 
     def sg_find(self, entityType, filters, fields, order=None):
-        return self._sg.find(entityType, filters, fields, order)
+        return self.carbine_find(entityType, filters, fields, order, find_one=False)
+        # return self._sg.find(entityType, filters, fields, order)
+
+    def carbine_find(self, entityType, filters, fields, order=None, find_one=False):
+        # entityType <=> table name (! need to handle translation)
+        # ~ select *fields from entityType
+
+        model = carbine.get_model(entityType)
+
+        # TODO handle pseudo join fields (ie entity.Task.created_by.HumanUser.firstname)
+        # TODO sometimes shotgun also returns the display name
+        queryFields = []
+
+        # by default peewee doesnt return the id, but shotgun does
+        if 'id' not in fields:
+            fields.append('id')
+
+        for field in fields:
+            fieldtype = model.getFieldType(field)
+
+            if fieldtype == 'Primitive':
+                queryFields.append(getattr(model, field))
+
+            elif fieldtype == 'Entity':
+                queryFields.append(getattr(model, field + "__type"))
+                queryFields.append(getattr(model, field + "__id"))
+
+            elif fieldtype == 'MultiEntity':
+                pass
+
+        query = model.select(*queryFields)
+        print 'select query: %s' % query
+
+        # TODO handle foreign key
+        # TODO handle pseudo join
+        for _filter in filters:
+            field, relation, values = _filter
+            if relation not in operatorTranslation.keys():
+                raise RuntimeError('operation %s is not handled (yet!) by sg_wrapper using carbine' % relation)
+
+            query = query.where( operatorTranslation[relation](getattr(model, field), values) )
+
+
+        print 'filter query: %s' % query
+
+
+        if order:
+            for orderRule in order:
+                orderAttr = getattr(model, orderRule['field_name'])
+                if orderRule.get('direction') == 'desc':
+                    orderAttr = orderAttr.desc()
+                query = query.order_by(orderAttr)
+
+        if find_one:
+            query = query.limit(1)
+
+
+        print "query: %s" % query
+
+        res = []
+        # TODO sometimes shotgun returns the display name (dunno why, dunno when) on nested structs
+        # in addition to the type & the id
+        for row in query:
+            formattedRow = {
+                'type': row.__class__.__name__,  # == entityType everytime ?
+            }
+
+            for field in fields:
+                attr = None
+                fieldtype = row.getFieldType(field)
+
+                if fieldtype == 'Primitive':
+                    attr = getattr(row, field, None)
+
+                elif fieldtype == 'Entity':
+                    attr = {
+                        'type': getattr(row, field + "__type", None),
+                        'id': getattr(row, field + "__id", None),
+                    }
+
+                elif fieldtype == 'MultiEntity':
+                    # TODO could be a join in the previous query
+                    linkedModel = carbine.get_model(row.multiEntityFields()[field])
+                    attr = [
+                        {
+                            'type': linkedEntity.dest__type,
+                            'id': linkedEntity.dest__id,
+                        }
+                        for linkedEntity in linkedModel.select().where(linkedModel.origin == row.id)
+                    ]
+
+                if attr:
+                    formattedRow[field] = attr
+
+            res.append(formattedRow)
+
+
+        if find_one:
+            if res:
+                return res[0]
+            else:
+                return None
+
+        return res
 
     def update(self, entity, updateFields):
         ''' Update entity fields

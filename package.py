@@ -1,7 +1,10 @@
 name = 'sg_wrapper'
 version = '0.0.0.mikros.1.5.1'
 
-requires = ['shotgunPythonApi']
+requires = [
+    'shotgunPythonApi',
+    'carbine',
+]
 
 custom = {
         'description': 'Wrapper around shotgun',
