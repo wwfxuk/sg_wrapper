@@ -1,6 +1,7 @@
 import copy
 import os
 import operator
+import os
 
 import shotgun_api3
 from carbine import carbine
@@ -392,6 +393,16 @@ class Shotgun(object):
         if 'id' not in fields:
             fields.append('id')
 
+        # TODO kinda meh way to handle paths
+        if 'path' in fields and not model.getFieldType('path'):
+            if model.getFieldType('path_cache') and model.getFieldType('path_cache_storage'):
+                if 'path_cache' not in fields:
+                    fields.append('path_cache')
+
+                if 'path_cache_storage' not in fields:
+                    fields.append('path_cache_storage')
+
+
         for field in fields:
             fieldtype = model.getFieldType(field)
 
@@ -403,22 +414,96 @@ class Shotgun(object):
                 queryFields.append(getattr(model, field + "__id"))
 
             elif fieldtype == 'MultiEntity':
+                # handled later
                 pass
 
         query = model.select(*queryFields)
-        print 'select query: %s' % query
+        # print 'select query: %s' % query
 
         # TODO handle foreign key
         # TODO handle pseudo join
+        fullFilter = None
         for _filter in filters:
             field, relation, values = _filter
             if relation not in operatorTranslation.keys():
                 raise RuntimeError('operation %s is not handled (yet!) by sg_wrapper using carbine' % relation)
 
-            query = query.where( operatorTranslation[relation](getattr(model, field), values) )
+            fieldtype = model.getFieldType(field)
 
+            filterToAdd = None
 
-        print 'filter query: %s' % query
+            if fieldtype == 'Primitive':
+                filterToAdd = operatorTranslation[relation](getattr(model, field), values)
+
+            elif fieldtype == 'Entity':
+                # TODO atm only supporting filter on id & type
+
+                if isinstance(values, list):
+                    if relation not in ['in', 'not_in']:
+                        raise RuntimeError('operation %s not supported on a single entity link using a list of values' % relation)
+
+                    # list of dict, grouped by type, to avoid an overcomplicated query
+                    typeValues = {}
+                    for value in values:
+                        _type = value.get('type')
+                        if _type not in typeValues:
+                            typeValues[_type] = set()
+                        typeValues[_type].add(value.get('id'))
+
+                    for t, ids in typeValues.iteritems():
+                        subfilter = None
+
+                        if ids:
+                            subfilter = operatorTranslation[relation](
+                                getattr(model, field + "__id"), list(ids))
+
+                        if t:
+                            if not subfilter:
+                                subfilter = getattr(model, field + "__type") == t
+                            else:
+                                subfilter = subfilter & (getattr(model, field + "__type") == t)
+
+                        if not filterToAdd:
+                            filterToAdd = subfilter
+                        else:
+                            filterToAdd = filterToAdd | subfilter
+
+                elif isinstance(values, dict):
+                    if 'id' in values:
+                        filterToAdd = operatorTranslation[relation](
+                            getattr(model, field + "__id"), values['id'])
+
+                    if 'type' in values:
+                        secondFilter = operatorTranslation[relation](
+                            getattr(model, field + "__type"), values['type'])
+
+                        if not filterToAdd:
+                            filterToAdd = secondFilter
+                        else:
+                            filterToAdd = filterToAdd & secondFilter
+
+                else:
+                    raise RuntimeError('filtering on a link without something else than a dict is not supported (yet)')
+
+            elif fieldtype == 'MultiEntity':
+                # TODO atm only support filter on id & type
+                raise RuntimeError('MultiEntity filters not supported')
+
+            if not fullFilter:
+                fullFilter = filterToAdd
+            else:
+                fullFilter = fullFilter & filterToAdd
+
+        if fullFilter:
+            try:
+                query = query.where(fullFilter)
+            except:
+                print "query: %s" % query
+                print "filter: %s %s %s" % (field, relation, values)
+                print "operation translation: %s" % operatorTranslation[relation]
+                raise
+
+        # print 'filter query: %s' % query
 
 
         if order:
@@ -449,21 +534,50 @@ class Shotgun(object):
                 if fieldtype == 'Primitive':
                     attr = getattr(row, field, None)
 
+                    if isinstance(attr, str):
+                        attr = attr.encode('utf-8')
+
+                    # TODO thats kinda meh hack to handle the paths
+                    if field == 'path_cache' \
+                            and ('path' not in fields or not row.getFieldType(row)) \
+                            and row.getFieldType('path_cache_storage') == 'Entity':
+
+                        path_cache_storage = getattr(row, 'path_cache_storage', None)
+                        if path_cache_storage:
+                            formattedRow['path'] = {
+                                'local_path': os.path.join(path_cache_storage.linux_path, attr)
+                            }
+
                 elif fieldtype == 'Entity':
-                    attr = {
-                        'type': getattr(row, field + "__type", None),
-                        'id': getattr(row, field + "__id", None),
-                    }
+                    entity_id = getattr(row, field + "__id", None)
+                    if entity_id:
+
+                        entity_type = getattr(row, field + "__type", None)
+                        if isinstance(entity_type, str):
+                            entity_type = entity_type.encode('ascii', 'ignore'),
+
+                        attr = {
+                            'type': entity_type,
+                            'id': entity_id,
+                        }
+
+                    else:
+                        attr = None
+
 
                 elif fieldtype == 'MultiEntity':
                     # TODO could be a join in the previous query
                     linkedModel = carbine.get_model(row.multiEntityFields()[field])
+
                     attr = [
                         {
-                            'type': linkedEntity.dest__type,
+                            'type': linkedEntity.dest__type.encode('ascii', 'ignore') \
+                                    if isinstance(linkedEntity.dest__type, str) \
+                                    else linkedEntity.dest__type,
                             'id': linkedEntity.dest__id,
                         }
                         for linkedEntity in linkedModel.select().where(linkedModel.origin == row.id)
+                        if linkedEntity.dest__id
                     ]
 
                 if attr:
@@ -540,6 +654,7 @@ class Shotgun(object):
         scriptEntity = self.sg_find_one('ApiUser', [['firstname', 'is', scriptName]], ['firstname', 'salted_password'])  # also retrieve firstname because the search is case insensitive but the auth is not
 
         # if no api was found, search it in the retired api. If it is still not found, generate a key in shotgun
+        # TODO replace this by a carbine compliant call
         if not scriptEntity:
             archivedScripts = self._sg.find('ApiUser', [['firstname', 'is', scriptName]], ['firstname', 'salted_password'], [], 'all', 0, True)
 
