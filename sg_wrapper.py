@@ -2,6 +2,7 @@ import copy
 import os
 import operator
 import os
+import time
 
 import shotgun_api3
 from carbine import carbine
@@ -108,8 +109,9 @@ class ShotgunWrapperError(Exception):
 # standard Shotgun API.
 class Shotgun(object):
 
-    def __init__(self, sgServer='', sgScriptName='',
-            sgScriptKey='', sg=None, disableApiAuthOverride=False, printInfo=True, **kwargs):
+    def __init__(self, sgServer='', sgScriptName='', sgScriptKey='', sg=None,
+                 disableApiAuthOverride=False, printInfo=True, carbine=True,  # TODO carbine=False
+                 **kwargs):
 
         if sg:
             self._sg = sg
@@ -122,6 +124,8 @@ class Shotgun(object):
         self._entity_fields = {}
         self._entities = {}
         self._entity_searches = []
+
+        self.carbine = carbine
 
         self.update_user_info()
 
@@ -138,13 +142,19 @@ class Shotgun(object):
 
         return name + "s"
 
+    @profile
     def get_entity_list(self):
         entitySchema = self._sg.schema_entity_read()
         entities = []
         for e in entitySchema:
             if e in ignoredTables:
                 continue
-            newEntity = {'type': e, 'name': entitySchema[e]['name']['value'].replace(" ", ""), 'fields': []}
+
+            newEntity = {
+                'type': e,
+                'name': entitySchema[e]['name']['value'].replace(" ", ""),
+                'fields': []
+            }
             newEntity['type_plural'] = self.pluralise(newEntity['type'])
             newEntity['name_plural'] = self.pluralise(newEntity['name'])
             entities.append(newEntity)
@@ -168,6 +178,7 @@ class Shotgun(object):
         fields = self.get_entity_fields(entityType)
         return fields.keys()
 
+    @profile
     def get_entity_fields(self, entityType):
         if entityType not in self._entity_fields:
             self._entity_fields[entityType] = self._sg.schema_field_read(entityType)
@@ -218,8 +229,12 @@ class Shotgun(object):
         return entity
 
 
+    @profile
     def find_entity(self, entityType, key = None, find_one = True, fields = None,
             order=None, exclude_fields = None, **kwargs):
+
+        startingTime = time.time()
+
         filters = {}
 
         thisEntityType = None
@@ -369,17 +384,26 @@ class Shotgun(object):
         thisSearch['result'] = result
         self._entity_searches.append(thisSearch)
 
+        print 'find_entity(%s) took %s' % (entityType, time.time() - startingTime)
+
         return result
 
+
     def sg_find_one(self, entityType, filters, fields, order=None):
-        return self.carbine_find(entityType, filters, fields, order, find_one=True)
-        # return self._sg.find_one(entityType, filters, fields, order)
+        if self.carbine:
+            return self.carbine_find(entityType, filters, fields, order, find_one=True)
+        else:
+            return self._sg.find_one(entityType, filters, fields, order)
 
     def sg_find(self, entityType, filters, fields, order=None):
-        return self.carbine_find(entityType, filters, fields, order, find_one=False)
-        # return self._sg.find(entityType, filters, fields, order)
+        if self.carbine:
+            return self.carbine_find(entityType, filters, fields, order, find_one=False)
+        else:
+            return self._sg.find(entityType, filters, fields, order)
+
 
     def carbine_find(self, entityType, filters, fields, order=None, find_one=False):
+        startingTime = time.time()
         # entityType <=> table name (! need to handle translation)
         # ~ select *fields from entityType
 
@@ -414,6 +438,7 @@ class Shotgun(object):
                 queryFields.append(getattr(model, field + "__id"))
 
             elif fieldtype == 'MultiEntity':
+                # join
                 # handled later
                 pass
 
@@ -565,9 +590,13 @@ class Shotgun(object):
                         attr = None
 
 
-                elif fieldtype == 'MultiEntity':
+                elif fieldtype == 'MultiEntity' and False:
                     # TODO could be a join in the previous query
                     linkedModel = carbine.get_model(row.multiEntityFields()[field])
+
+                    subquery = linkedModel.select().where(linkedModel.origin == row.id)
+
+                    # print "\tsubquery: %s" % subquery
 
                     attr = [
                         {
@@ -576,7 +605,7 @@ class Shotgun(object):
                                     else linkedEntity.dest__type,
                             'id': linkedEntity.dest__id,
                         }
-                        for linkedEntity in linkedModel.select().where(linkedModel.origin == row.id)
+                        for linkedEntity in subquery
                         if linkedEntity.dest__id
                     ]
 
@@ -585,6 +614,7 @@ class Shotgun(object):
 
             res.append(formattedRow)
 
+        print '|_=> Took %s' % (time.time() - startingTime)
 
         if find_one:
             if res:
