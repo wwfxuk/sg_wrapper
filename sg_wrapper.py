@@ -113,6 +113,8 @@ class Shotgun(object):
                  disableApiAuthOverride=False, printInfo=True, carbine=True,  # TODO carbine=False
                  **kwargs):
 
+        self.carbine = carbine
+
         if sg:
             self._sg = sg
         elif sgServer and sgScriptName and sgScriptKey:
@@ -124,8 +126,6 @@ class Shotgun(object):
         self._entity_fields = {}
         self._entities = {}
         self._entity_searches = []
-
-        self.carbine = carbine
 
         self.update_user_info()
 
@@ -144,7 +144,11 @@ class Shotgun(object):
 
     @profile
     def get_entity_list(self):
-        entitySchema = self._sg.schema_entity_read()
+        if not self.carbine:
+            entitySchema = self._sg.schema_entity_read()
+        else:
+            entitySchema = carbine.carbineTableDescriptions
+
         entities = []
         for e in entitySchema:
             if e in ignoredTables:
@@ -181,15 +185,22 @@ class Shotgun(object):
     @profile
     def get_entity_fields(self, entityType):
         if entityType not in self._entity_fields:
-            # truncate schema_field_read result - only keep what we use
-            self._entity_fields[entityType] = {
-                field: {
-                    k: v['value']
-                    for k, v in fieldDict.items()
-                    if k in ['editable', 'data_type'] and 'value' in v
 
-                } for field, fieldDict in self._sg.schema_field_read(entityType).items()
-            }
+            if not self.carbine:
+                # truncate schema_field_read result - only keep what we use
+                self._entity_fields[entityType] = {
+                    field: {
+                        k: v['value']
+                        for k, v in fieldDict.items()
+                        if k in ['editable', 'data_type'] and 'value' in v
+
+                    } for field, fieldDict in self._sg.schema_field_read(entityType).items()
+                }
+
+            else:  # carbine
+                model = carbine.get_model(entityType)
+                self._entity_fields[entityType] = model.getSchema()
+
         return self._entity_fields[entityType]
 
     def is_entity(self, entityType):
