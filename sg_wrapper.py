@@ -142,7 +142,6 @@ class Shotgun(object):
 
         return name + "s"
 
-    @profile
     def get_entity_list(self):
         if not self.carbine:
             entitySchema = self._sg.schema_entity_read()
@@ -182,7 +181,6 @@ class Shotgun(object):
         fields = self.get_entity_fields(entityType)
         return fields.keys()
 
-    @profile
     def get_entity_fields(self, entityType):
         if entityType not in self._entity_fields:
 
@@ -248,7 +246,6 @@ class Shotgun(object):
         return entity
 
 
-    @profile
     def find_entity(self, entityType, key = None, find_one = True, fields = None,
             order=None, exclude_fields = None, **kwargs):
 
@@ -628,7 +625,7 @@ class Shotgun(object):
                         if linkedEntity.dest__id
                     ]
 
-                if attr:
+                if attr or field not in formattedRow:
                     formattedRow[field] = attr
 
             res.append(formattedRow)
