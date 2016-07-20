@@ -400,7 +400,7 @@ class Shotgun(object):
         thisSearch['result'] = result
         self._entity_searches.append(thisSearch)
 
-        print 'find_entity(%s) took %s' % (entityType, time.time() - startingTime)
+        # print 'find_entity(%s) took %s' % (entityType, time.time() - startingTime)
 
         return result
 
@@ -558,7 +558,7 @@ class Shotgun(object):
             query = query.limit(1)
 
 
-        print "query: %s" % query
+        # print "query: %s" % query
 
         res = []
         # TODO sometimes shotgun returns the display name (dunno why, dunno when) on nested structs
@@ -625,12 +625,12 @@ class Shotgun(object):
                         if linkedEntity.dest__id
                     ]
 
-                if attr or field not in formattedRow:
+                if attr or not formattedRow.get(field):
                     formattedRow[field] = attr
 
             res.append(formattedRow)
 
-        print '|_=> Took %s' % (time.time() - startingTime)
+        # print '|_=> Took %s' % (time.time() - startingTime)
 
         if find_one:
             if res:
