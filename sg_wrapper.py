@@ -55,6 +55,10 @@ dataTypeList = frozenset([
     'addressing'
     ])
 
+ignoredTables = [
+    'Cut',
+]
+
 
 class ShotgunWrapperError(Exception):
     pass
@@ -98,6 +102,8 @@ class Shotgun(object):
         entitySchema = self._sg.schema_entity_read()
         entities = []
         for e in entitySchema:
+            if e in ignoredTables:
+                continue
             newEntity = {'type': e, 'name': entitySchema[e]['name']['value'].replace(" ", ""), 'fields': []}
             newEntity['type_plural'] = self.pluralise(newEntity['type'])
             newEntity['name_plural'] = self.pluralise(newEntity['name'])
