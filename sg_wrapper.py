@@ -1,4 +1,5 @@
 import copy
+import os
 
 import shotgun_api3
 
@@ -55,9 +56,13 @@ dataTypeList = frozenset([
     'addressing'
     ])
 
-ignoredTables = [
-    'Cut',
-]
+# anim only: exclude 'Cut' table to avoid conflicts with the CustomEntity23
+if os.getenv('PROD_TYPE', 'anim') == 'anim':
+    ignoredTables = [
+        'Cut',
+    ]
+else:
+    ignoredTables = []
 
 
 class ShotgunWrapperError(Exception):
