@@ -563,39 +563,39 @@ class Shotgun(object):
         res = []
         # TODO sometimes shotgun returns the display name (dunno why, dunno when) on nested structs
         # in addition to the type & the id
-        query = query.naive()
+        query = query.dicts()
         dbRes = query.execute()
         for row in dbRes:
             formattedRow = {
-                'type': row.__class__.__name__,  # == entityType everytime ?
+                'type': model
             }
 
             for field in fields:
                 attr = None
-                fieldtype = row.getFieldType(field)
+                fieldtype = model.getFieldType(field)
 
                 if fieldtype == 'Primitive':
-                    attr = getattr(row, field, None)
+                    attr = row.get(field)
 
                     if isinstance(attr, str):
                         attr = attr.encode('utf-8')
 
                     # TODO thats kinda meh hack to handle the paths
                     if field == 'path_cache' \
-                            and ('path' not in fields or not row.getFieldType(row)) \
-                            and row.getFieldType('path_cache_storage') == 'Entity':
+                            and ('path' not in fields or not model.getFieldType('path')) \
+                            and model.getFieldType('path_cache_storage') == 'Entity':
 
-                        path_cache_storage = row.path_cache_storage
+                        path_cache_storage = row.get('path_cache_storage')
                         if path_cache_storage:
                             formattedRow['path'] = {
                                 'local_path': os.path.join(path_cache_storage.linux_path, attr)
                             }
 
                 elif fieldtype == 'Entity':
-                    entity_id = getattr(row, field + "__id", None)
+                    entity_id = row.get(field + "__id")
                     if entity_id:
 
-                        entity_type = getattr(row, field + "__type", None)
+                        entity_type = row.get(field + "__type")
                         if isinstance(entity_type, str):
                             entity_type = entity_type.encode('ascii', 'ignore'),
 
@@ -610,9 +610,9 @@ class Shotgun(object):
 
                 elif fieldtype == 'MultiEntity' and False:
                     # TODO could be a join in the previous query
-                    linkedModel = carbine.get_model(row.multiEntityFields()[field])
+                    linkedModel = carbine.get_model(model.getLinkTable(field))
 
-                    subquery = linkedModel.select().where(linkedModel.origin == row.id)
+                    subquery = linkedModel.select().where(linkedModel.origin == row['id'])
 
                     # print "\tsubquery: %s" % subquery
 
