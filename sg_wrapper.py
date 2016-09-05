@@ -434,6 +434,7 @@ class Shotgun(object):
             fields.append('id')
 
         # TODO kinda meh way to handle paths
+        pathRequested = False
         if 'path' in fields and not model.getFieldType('path'):
             if model.getFieldType('path_cache') and model.getFieldType('path_cache_storage'):
                 if 'path_cache' not in fields:
@@ -443,6 +444,7 @@ class Shotgun(object):
                     fields.append('path_cache_storage')
 
                 fields.remove('path')
+                pathRequested = True
 
 
         for field in fields:
@@ -638,6 +640,9 @@ class Shotgun(object):
 
                 if attr or not formattedRow.get(field):
                     formattedRow[field] = attr
+
+            if pathRequested and not 'path' in formattedRow:
+                formattedRow['path'] = None
 
             res.append(formattedRow)
 
