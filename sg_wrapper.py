@@ -563,7 +563,9 @@ class Shotgun(object):
         res = []
         # TODO sometimes shotgun returns the display name (dunno why, dunno when) on nested structs
         # in addition to the type & the id
-        for row in query:
+        query = query.naive()
+        dbRes = query.execute()
+        for row in dbRes:
             formattedRow = {
                 'type': row.__class__.__name__,  # == entityType everytime ?
             }
@@ -583,7 +585,7 @@ class Shotgun(object):
                             and ('path' not in fields or not row.getFieldType(row)) \
                             and row.getFieldType('path_cache_storage') == 'Entity':
 
-                        path_cache_storage = getattr(row, 'path_cache_storage', None)
+                        path_cache_storage = row.path_cache_storage
                         if path_cache_storage:
                             formattedRow['path'] = {
                                 'local_path': os.path.join(path_cache_storage.linux_path, attr)
