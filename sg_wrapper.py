@@ -442,6 +442,8 @@ class Shotgun(object):
                 if 'path_cache_storage' not in fields:
                     fields.append('path_cache_storage')
 
+                fields.remove('path')
+
 
         for field in fields:
             fieldtype = model.getFieldType(field)
@@ -567,7 +569,7 @@ class Shotgun(object):
         dbRes = query.execute()
         for row in dbRes:
             formattedRow = {
-                'type': model
+                'type': entityType
             }
 
             for field in fields:
@@ -581,15 +583,22 @@ class Shotgun(object):
                         attr = attr.encode('utf-8')
 
                     # TODO thats kinda meh hack to handle the paths
-                    if field == 'path_cache' \
-                            and ('path' not in fields or not model.getFieldType('path')) \
-                            and model.getFieldType('path_cache_storage') == 'Entity':
+                    if(field == 'path_cache'
+                            # and ('path' not in fields or not model.getFieldType('path'))
+                            and 'path' not in fields
+                            and model.getFieldType('path_cache_storage') == 'Entity'):
 
-                        path_cache_storage = row.get('path_cache_storage')
-                        if path_cache_storage:
-                            formattedRow['path'] = {
-                                'local_path': os.path.join(path_cache_storage.linux_path, attr)
-                            }
+                        pcs_id = row.get('path_cache_storage__id')
+                        pcs_type = row.get('path_cache_storage__type')
+                        if pcs_type and pcs_id:
+                            path_cache_storage = self.find_entity(pcs_type, key=pcs_id, find_one=True,
+                                                                  fields=['linux_path'])
+                            if path_cache_storage:
+                                linux_path = path_cache_storage._fields.get('linux_path')
+                                if linux_path:
+                                    formattedRow['path'] = {
+                                        'local_path': os.path.join(linux_path, attr)
+                                    }
 
                 elif fieldtype == 'Entity':
                     entity_id = row.get(field + "__id")
