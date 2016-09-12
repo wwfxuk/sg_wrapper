@@ -619,7 +619,7 @@ class Shotgun(object):
                         attr = None
 
 
-                elif fieldtype == 'MultiEntity' and False:
+                elif fieldtype == 'MultiEntity':
                     # TODO could be a join in the previous query
                     linkedModel = carbine.get_model(model.getLinkTable(field))
 
