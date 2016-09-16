@@ -1079,25 +1079,34 @@ class Entity(object):
             could help (if entity is not already in cache)
         '''
 
-        if fieldName in self._fields:
-            attribute = self._fields[fieldName]
-            if type(attribute) == dict and 'id' in attribute and 'type' in attribute:
-                if 'entity' not in attribute:
+        # Workaround to fix the attachment access to path fields problem.
+        # Attachements are handle differently by SG as some fields
+        # are dynamic and not described in the schema making sg_wrapper
+        # go wrong.
+        toVisit = [self._fields]
+        if self._entity_type == 'Attachment':
+            toVisit.append(self._fields['this_file'])
 
-                    if fields:
-                        attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'], fields=fields)
-                    else:
-                        attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'])
-                    #attribute['entity'] = Entity(self._shotgun, attribute['type'], {'id': attribute['id']})
-                return attribute['entity']
-            elif type(attribute) == list:
-                iterator = self.list_iterator(self._fields[fieldName], fields)
-                attrResult = []
-                for item in iterator:
-                    attrResult.append(item)
-                return attrResult
-            else:
-                return self._fields[fieldName]
+        for currentFields in toVisit:
+            if fieldName in currentFields:
+                attribute = currentFields[fieldName]
+                if type(attribute) == dict and 'id' in attribute and 'type' in attribute:
+                    if 'entity' not in attribute:
+
+                        if fields:
+                            attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'], fields=fields)
+                        else:
+                            attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'])
+                        #attribute['entity'] = Entity(self._shotgun, attribute['type'], {'id': attribute['id']})
+                    return attribute['entity']
+                elif type(attribute) == list:
+                    iterator = self.list_iterator(currentFields[fieldName], fields)
+                    attrResult = []
+                    for item in iterator:
+                        attrResult.append(item)
+                    return attrResult
+                else:
+                    return currentFields[fieldName]
 
         raise AttributeError("Entity '%s' has no field '%s'" % (self._entity_type, fieldName))
 
@@ -1158,18 +1167,6 @@ class Entity(object):
             raise AttributeError("Entity '%s' has no field '%s'" % (self._entity_type, fieldName))
 
     def __getattr__(self, attrName):
-        # Workaround to fix the attachment access to path fields problem.
-        # Attachements are handle differently by SG as some fields
-        # are dynamic and not described in the schema making sg_wrapper
-        # go wrong.
-        if self._entity_type == 'Attachment':
-            if attrName in self._fields:
-                return self._fields[attrName]
-            elif attrName in self._fields['this_file']:
-                return self._fields['this_file'][attrName]
-            else:
-                raise AttributeError("Entity '%s' has no field '%s'" % (
-                        self._entity_type, attrName))
         return self.field(attrName)
 
     def __setattr__(self, attrName, value):
