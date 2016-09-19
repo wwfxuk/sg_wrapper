@@ -1,5 +1,4 @@
 import copy
-import os
 import operator
 import os
 import time
@@ -610,6 +609,30 @@ class Shotgun(object):
                                     formattedRow['path'] = {
                                         'local_path': os.path.join(linux_path, attr)
                                     }
+
+                    # shotgun does some bs with the thumbnail paths
+                    # the EventLogEntry does not give the right path (!), neither for a private nor for a public
+                    # so we override the bs he gives us here
+                    elif field == 'image':
+                        baseUrl = None
+                        # private => we got an env variable for the thumbnail url
+                        if os.getenv('SHOTGUN_SITE_TYPE', 'cloud') != 'cloud':
+                            baseUrl = os.getenv('SHOTGUN_THUMBNAIL_SERV_URL')
+                            if baseUrl.endswith('/'):
+                                baseUrl = baseUrl[:-1]
+                        # public => we dont have an env, so url env + hardcoded relative url for thumbnails
+                        else:
+                            rootUrl = os.getenv('SHOTGUN_URL')
+                            if rootUrl:
+                                if rootUrl.endswith('/'):
+                                    rootUrl = rootUrl[:-1]
+                                baseUrl = '%s/thumbnail' % rootUrl
+
+                        # TODO if the thumbnail url format changes, we need to change it here
+                        if baseUrl:
+                            attr = '%s/%s/%s' % (baseUrl, entityType, row['id'])
+                        else:
+                            attr = None
 
                 elif fieldtype == 'Entity':
                     entity_id = row.get(field + "__id")
