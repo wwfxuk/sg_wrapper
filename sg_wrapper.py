@@ -101,6 +101,14 @@ operatorTranslation = {
 }
 
 
+# connection types # TODO doc and more connections
+# TODO autogenerate this with carbine using the web page fetched json and "through_join_entity_type"
+specialConnections = {
+    'PublishedFileDependency': 'published_file',
+}
+
+
+
 class ShotgunWrapperError(Exception):
     pass
 
@@ -627,10 +635,10 @@ class Shotgun(object):
                     # print "\tsubquery: %s" % subquery
 
                     if not self.carbineLazyMode:
-                        attr = carbineMultiEntityGetter(subquery)
+                        attr = carbineMultiEntityGetter(subquery, sgw=self)
 
                     else:
-                        attr = LazyObject(carbineMultiEntityGetter, subquery)
+                        attr = LazyObject(carbineMultiEntityGetter, subquery, sgw=self)
 
 
                 if attr or not formattedRow.get(field):
@@ -1279,18 +1287,36 @@ class Entity(object):
         self.__dict__.update(adict)
 
 
-def carbineMultiEntityGetter(subquery):
-    return [
-        {
-            'type': linkedEntity.dest__type.encode('ascii', 'ignore') \
-            if isinstance(linkedEntity.dest__type, str) \
-            else linkedEntity.dest__type,
-            'id': linkedEntity.dest__id,
-        }
-        for linkedEntity in subquery
-        if linkedEntity.dest__id
-    ]
+def carbineMultiEntityGetter(subquery, sgw):
+    res = []
+    for linkedEntity in subquery:
+        if linkedEntity.dest__id:
+            row = {}
+            innerField = specialConnections.get(linkedEntity.dest__type)
 
+            if innerField:
+                outerEntity = sgw.find_entity(linkedEntity.dest__type, id=linkedEntity.dest__id, fields=[innerField])
+                if innerField not in outerEntity._fields.keys():
+                    raise AttributeError("Entity '%s' has no inner field '%s'"
+                                         % (linkedEntity.dest__type, innerField))
+
+                innerEntity = outerEntity[innerField]
+                if 'type' not in innerEntity._fields.keys() or 'id' not in innerEntity._fields.keys():
+                       raise AttributeError("Entity '%s' has a malformed inner field '%s' (missing either id or type)"
+                                            % (linkedEntity.dest__type, innerField, innerEntity))
+                row['type'] = innerEntity['type'].encode('ascii', 'ignore')
+                row['id'] = innerEntity['id']
+
+            else:
+                if isinstance(linkedEntity.dest__type, str):
+                    row['type'] = linkedEntity.dest__type.encode('ascii', 'ignore')
+                else:
+                    row['type'] = linkedEntity.dest__type
+                row['id'] = linkedEntity.dest__id
+
+            res.append(row)
+
+    return res
 
 class LazyObject(object):
     def __init__(self, func, *funcArgs, **funcKwargs):
