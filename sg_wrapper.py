@@ -1325,7 +1325,6 @@ class LazyObject(object):
         self.funcKwargs = funcKwargs
 
     def get(self):
-        print 'solving %s' % self.funcArgs
         return self.func(*self.funcArgs, **self.funcKwargs)
 
     def __copy__(self):
