@@ -110,10 +110,11 @@ class ShotgunWrapperError(Exception):
 class Shotgun(object):
 
     def __init__(self, sgServer='', sgScriptName='', sgScriptKey='', sg=None,
-                 disableApiAuthOverride=False, printInfo=True, carbine=True,  # TODO carbine=False
+                 disableApiAuthOverride=False, printInfo=True, carbine=True, carbineLazyMode=True,  # TODO carbine=False
                  **kwargs):
 
         self.carbine = carbine
+        self.carbineLazyMode = carbineLazyMode
 
         if sg:
             self._sg = sg
@@ -620,23 +621,17 @@ class Shotgun(object):
 
 
                 elif fieldtype == 'MultiEntity':
-                    # TODO could be a join in the previous query
                     linkedModel = carbine.get_model(model.getLinkTable(field))
-
                     subquery = linkedModel.select().where(linkedModel.origin == row['id'])
 
                     # print "\tsubquery: %s" % subquery
 
-                    attr = [
-                        {
-                            'type': linkedEntity.dest__type.encode('ascii', 'ignore') \
-                                    if isinstance(linkedEntity.dest__type, str) \
-                                    else linkedEntity.dest__type,
-                            'id': linkedEntity.dest__id,
-                        }
-                        for linkedEntity in subquery
-                        if linkedEntity.dest__id
-                    ]
+                    if not self.carbineLazyMode:
+                        attr = carbineMultiEntityGetter(subquery)
+
+                    else:
+                        attr = LazyObject(carbineMultiEntityGetter, subquery)
+
 
                 if attr or not formattedRow.get(field):
                     formattedRow[field] = attr
@@ -1008,7 +1003,10 @@ class Entity(object):
     def __init__(self, shotgun, entity_type, fields):
         self._entity_type = entity_type
         self._shotgun = shotgun
-        self._fields = fields
+        if shotgun.carbineLazyMode:
+            self._fields = LazyDict(fields)
+        else:
+            self_fields = fields
         self._fields_changed = {}
         self._sg_filters = []
 
@@ -1279,3 +1277,64 @@ class Entity(object):
         #del adict['_pickle_shotgun_convert_datetimes_to_utc']
 
         self.__dict__.update(adict)
+
+
+def carbineMultiEntityGetter(subquery):
+    return [
+        {
+            'type': linkedEntity.dest__type.encode('ascii', 'ignore') \
+            if isinstance(linkedEntity.dest__type, str) \
+            else linkedEntity.dest__type,
+            'id': linkedEntity.dest__id,
+        }
+        for linkedEntity in subquery
+        if linkedEntity.dest__id
+    ]
+
+
+class LazyObject(object):
+    def __init__(self, func, *funcArgs, **funcKwargs):
+        self.func = func
+        self.funcArgs = funcArgs
+        self.funcKwargs = funcKwargs
+
+    def get(self):
+        print 'solving %s' % self.funcArgs
+        return self.func(*self.funcArgs, **self.funcKwargs)
+
+    def __copy__(self):
+        return LazyObject(self.func, *self.funcArgs, **self.funcKwargs)
+
+    def __deepcopy__(self, memo):
+        # TODO rework deepcopy, as its only a simple one copy, due to problems with peewee queries not deepcopy-able
+
+        # func = copy.deepcopy(self.func, memo)
+        # funcArgs = copy.deepcopy(self.funcArgs, memo)
+        # funcKwargs = copy.deepcopy(self.funcKwargs, memo)
+        # return LazyObject(func, *funcArgs, **funcKwargs)
+
+        return LazyObject(self.func, *self.funcArgs, **self.funcKwargs)
+
+
+class LazyDict(dict):
+    def __getitem__(self, key):
+        it = super(LazyDict, self).__getitem__(key)
+        if not isinstance(it, LazyObject):
+            return it
+        res = it.get()
+        super(LazyDict, self).__setitem__(key, res)
+        return res
+
+    # default get is built in C and does not work with a custom __getitem__, so we need to redefine it
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __copy__(self):
+        return LazyDict(super(LazyDict, self))
+
+    def __deepcopy__(self, memo):
+        return LazyDict(copy.deepcopy(super(LazyDict, self), memo))
+
