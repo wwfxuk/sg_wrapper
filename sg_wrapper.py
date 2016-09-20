@@ -117,11 +117,25 @@ class ShotgunWrapperError(Exception):
 class Shotgun(object):
 
     def __init__(self, sgServer='', sgScriptName='', sgScriptKey='', sg=None,
-                 disableApiAuthOverride=False, printInfo=True, carbine=True, carbineLazyMode=True,  # TODO carbine=False
+                 disableApiAuthOverride=False, printInfo=True,
+                 carbine='optional', carbineLazyMode=True,  # TODO carbine=None, lazy=False
                  **kwargs):
 
+        # carbine setup
+        if carbine not in ['required', 'optional']:
+            carbine = None
         self.carbine = carbine
+
+        # if carbine is wanted, try to connect, and fail if it is required
+        if carbine and not self.carbineConnectionTest():
+            self.carbine = None
+            if printInfo:
+                print 'Carbine connection failed. Falling back to shotgun connection'
+
         self.carbineLazyMode = carbineLazyMode
+        if not self.carbine:
+            self.carbineLazyMode = False
+
 
         if sg:
             self._sg = sg
@@ -139,6 +153,15 @@ class Shotgun(object):
 
         if not disableApiAuthOverride:
             self.update_auth_info(sgScriptName, printInfo=printInfo)
+
+    def carbineConnectionTest(self):
+        try:
+            carbine.db.connect()
+        except carbine.OperationalError:
+            if not self.carbine == 'required':
+                return False
+            raise
+        return True
 
     def pluralise(self, name):
         if name in customPlural:
@@ -183,7 +206,6 @@ class Shotgun(object):
             raise ValueError('Could not find entity of type %s' % entityType)
         else:
             return r[0]['name']
-
 
     def get_entity_field_list(self, entityType):
         fields = self.get_entity_fields(entityType)
@@ -1037,7 +1059,7 @@ class Entity(object):
         if shotgun.carbineLazyMode:
             self._fields = LazyDict(fields)
         else:
-            self_fields = fields
+            self._fields = fields
         self._fields_changed = {}
         self._sg_filters = []
 
