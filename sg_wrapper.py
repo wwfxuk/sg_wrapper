@@ -277,7 +277,7 @@ class Shotgun(object):
 
 
     def find_entity(self, entityType, key = None, find_one = True, fields = None,
-            order=None, exclude_fields = None, **kwargs):
+            order=None, exclude_fields = None, carbine=None, **kwargs):
 
         startingTime = time.time()
 
@@ -407,16 +407,16 @@ class Shotgun(object):
         result = None
 
         if find_one:
-            sg_result = self.sg_find_one(thisEntityType, sgFilters, fields, sgOrder)
+            sg_result = self.sg_find_one(thisEntityType, sgFilters, fields, sgOrder, carbine=carbine)
 
             if sg_result:
-                result = Entity(self, thisEntityType, sg_result)
+                result = Entity(self, thisEntityType, sg_result, carbine=carbine)
         else:
-            sg_results = self.sg_find(thisEntityType, sgFilters, fields, sgOrder)
+            sg_results = self.sg_find(thisEntityType, sgFilters, fields, sgOrder, carbine=carbine)
 
             result = []
             for sg_result in sg_results:
-                result.append(Entity(self, thisEntityType, sg_result))
+                result.append(Entity(self, thisEntityType, sg_result, carbine=carbine))
 
             result.extend(entities_from_cache)
 
@@ -435,14 +435,14 @@ class Shotgun(object):
         return result
 
 
-    def sg_find_one(self, entityType, filters, fields, order=None):
-        if self.carbine:
+    def sg_find_one(self, entityType, filters, fields, order=None, carbine=None):
+        if carbine == True or (carbine != False and self.carbine):
             return self.carbine_find(entityType, filters, fields, order, find_one=True)
         else:
             return self._sg.find_one(entityType, filters, fields, order)
 
-    def sg_find(self, entityType, filters, fields, order=None):
-        if self.carbine:
+    def sg_find(self, entityType, filters, fields, order=None, carbine=None):
+        if carbine == True or (carbine != False and self.carbine):
             return self.carbine_find(entityType, filters, fields, order, find_one=False)
         else:
             return self._sg.find(entityType, filters, fields, order)
@@ -624,7 +624,7 @@ class Shotgun(object):
                         pcs_type = row.get('path_cache_storage__type')
                         if pcs_type and pcs_id:
                             path_cache_storage = self.find_entity(pcs_type, key=pcs_id, find_one=True,
-                                                                  fields=['linux_path'])
+                                                                  fields=['linux_path'], carbine=True)
                             if path_cache_storage:
                                 linux_path = path_cache_storage._fields.get('linux_path')
                                 if linux_path:
@@ -1053,7 +1053,7 @@ class Shotgun(object):
 
 
 class Entity(object):
-    def __init__(self, shotgun, entity_type, fields):
+    def __init__(self, shotgun, entity_type, fields, carbine=None):
         self._entity_type = entity_type
         self._shotgun = shotgun
         if shotgun.carbineLazyMode:
@@ -1065,6 +1065,7 @@ class Entity(object):
 
         self._entity_id = self._fields['id']
         self._shotgun.register_entity(self)
+        self._carbine = carbine
 
     def reload(self, mode='all', fields=None):
 
@@ -1095,7 +1096,7 @@ class Entity(object):
         else:
             raise ValueError('Unknown mode: %s' % (mode))
 
-        self._fields = self._shotgun.sg_find_one(self._entity_type, [["id", "is", self._entity_id]], fields = fieldsToQuery)
+        self._fields = self._shotgun.sg_find_one(self._entity_type, [["id", "is", self._entity_id]], fields = fieldsToQuery, carbine=carbine)
 
     def fields(self):
         # Workaround to fix the attachment access to path fields problem.
@@ -1145,9 +1146,9 @@ class Entity(object):
                     if 'entity' not in attribute:
 
                         if fields:
-                            attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'], fields=fields)
+                            attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'], fields=fields, carbine=carbine)
                         else:
-                            attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'])
+                            attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'], carbine=carbine)
                         #attribute['entity'] = Entity(self._shotgun, attribute['type'], {'id': attribute['id']})
                     return attribute['entity']
                 elif type(attribute) == list:
@@ -1173,9 +1174,9 @@ class Entity(object):
 
             if 'entity' not in entity:
                 if fields:
-                    entity['entity'] = self._shotgun.find_entity(entity['type'], id = entity['id'], fields=fields)
+                    entity['entity'] = self._shotgun.find_entity(entity['type'], id = entity['id'], fields=fields, carbine=carbine)
                 else:
-                    entity['entity'] = self._shotgun.find_entity(entity['type'], id = entity['id'])
+                    entity['entity'] = self._shotgun.find_entity(entity['type'], id = entity['id'], carbine=carbine)
 
             yield entity['entity']
 
@@ -1340,7 +1341,7 @@ def carbineMultiEntityGetter(subquery, sgw):
             innerField = specialConnections.get(linkedEntity.dest__type)
 
             if innerField:
-                outerEntity = sgw.find_entity(linkedEntity.dest__type, id=linkedEntity.dest__id, fields=[innerField])
+                outerEntity = sgw.find_entity(linkedEntity.dest__type, id=linkedEntity.dest__id, fields=[innerField], carbine=True)
                 if innerField not in outerEntity._fields.keys():
                     raise AttributeError("Entity '%s' has no inner field '%s'"
                                          % (linkedEntity.dest__type, innerField))
