@@ -293,6 +293,12 @@ class Shotgun(object):
                     e['fields'] = self.get_entity_field_list(thisEntityType)
                 thisEntityFields = e['fields']
 
+
+        # EventLogEntry are not saved to carbine: bypass carbine & forward to sg api
+        entityCarbine = carbine  # for the future inner EventLogEntry entity requests
+        if thisEntityType == 'EventLogEntry':
+            carbine = False  # for the request
+
         if key:
             if type(key) == int:
                 filters['id'] = key
@@ -410,13 +416,13 @@ class Shotgun(object):
             sg_result = self.sg_find_one(thisEntityType, sgFilters, fields, sgOrder, carbine=carbine)
 
             if sg_result:
-                result = Entity(self, thisEntityType, sg_result, carbine=carbine)
+                result = Entity(self, thisEntityType, sg_result, carbine=entityCarbine)
         else:
             sg_results = self.sg_find(thisEntityType, sgFilters, fields, sgOrder, carbine=carbine)
 
             result = []
             for sg_result in sg_results:
-                result.append(Entity(self, thisEntityType, sg_result, carbine=carbine))
+                result.append(Entity(self, thisEntityType, sg_result, carbine=entityCarbine))
 
             result.extend(entities_from_cache)
 
@@ -1094,7 +1100,7 @@ class Entity(object):
         else:
             raise ValueError('Unknown mode: %s' % (mode))
 
-        self._fields = self._shotgun.sg_find_one(self._entity_type, [["id", "is", self._entity_id]], fields = fieldsToQuery, carbine=carbine)
+        self._fields = self._shotgun.sg_find_one(self._entity_type, [["id", "is", self._entity_id]], fields = fieldsToQuery, carbine=self._carbine)
 
     def fields(self):
         # Workaround to fix the attachment access to path fields problem.
@@ -1144,9 +1150,9 @@ class Entity(object):
                     if 'entity' not in attribute:
 
                         if fields:
-                            attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'], fields=fields, carbine=carbine)
+                            attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'], fields=fields, carbine=self._carbine)
                         else:
-                            attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'], carbine=carbine)
+                            attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'], carbine=self._carbine)
                         #attribute['entity'] = Entity(self._shotgun, attribute['type'], {'id': attribute['id']})
                     return attribute['entity']
                 elif type(attribute) == list:
@@ -1172,9 +1178,9 @@ class Entity(object):
 
             if 'entity' not in entity:
                 if fields:
-                    entity['entity'] = self._shotgun.find_entity(entity['type'], id = entity['id'], fields=fields, carbine=carbine)
+                    entity['entity'] = self._shotgun.find_entity(entity['type'], id = entity['id'], fields=fields, carbine=self._carbine)
                 else:
-                    entity['entity'] = self._shotgun.find_entity(entity['type'], id = entity['id'], carbine=carbine)
+                    entity['entity'] = self._shotgun.find_entity(entity['type'], id = entity['id'], carbine=self._carbine)
 
             yield entity['entity']
 
