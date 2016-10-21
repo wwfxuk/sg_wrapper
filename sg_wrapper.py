@@ -68,13 +68,46 @@ else:
 class ShotgunWrapperError(Exception):
     pass
 
+class retryWrapper(shotgun_api3.Shotgun):
+    ''' Wraps a shotgun_api3 object and retries any connection attempt when a 503 error si catched
+        Subclasses shotgun_api3.Shotgun forces us to use getattribute instead of getattr but
+        it allow isinstance to make the wrapper transparent
+    '''
+    def __init__(self, sg, maxConnectionAttempts, retrySleep, printInfo):
+        self._sg = sg
+        self.maxConnectionAttempts = maxConnectionAttempts
+        self.retrySleep = retrySleep
+        self.printInfo = printInfo
+
+    def __getattribute__(self, attr):
+        self_sg = object.__getattribute__(self, '_sg')
+        if not hasattr(self_sg, attr):
+            return object.__getattribute__(self, attr)
+
+        errorCount = 0
+        while True:
+            try:
+                return self._sg.__getattribute__(attr)
+            except shotgun_api3.lib.xmlrpclib.ProtocolError, err:
+                errorCount += 1
+                if errorCount >= self.maxConnectionAttempts:
+                    raise
+
+                if self.printInfo:
+                    print '[sg_wrapper] Connection error [%d/%d]: %s' \
+                            % (errorCount, self.maxConnectionAttempts, str(err))
+
+                time.sleep(self.retrySleep)
+
 
 # This is the base Shotgun class. Everything is created from here, and it deals with talking to the
 # standard Shotgun API.
 class Shotgun(object):
 
-    def __init__(self, sgServer='', sgScriptName='',
-            sgScriptKey='', sg=None, disableApiAuthOverride=False, printInfo=True, **kwargs):
+    def __init__(self, sgServer='', sgScriptName='', sgScriptKey='', sg=None,
+                 disableApiAuthOverride=False, printInfo=True,
+                 maxConnectionAttempts=5, retrySleep=3,
+                 **kwargs):
 
         if sg:
             self._sg = sg
@@ -82,6 +115,8 @@ class Shotgun(object):
             self._sg = shotgun_api3.Shotgun(sgServer, sgScriptName, sgScriptKey, **kwargs)
         else:
             raise RuntimeError('init requires a shotgun object or server, script name and key')
+
+        self._sg = retryWrapper(self._sg, maxConnectionAttempts, retrySleep, printInfo)
 
         self._entity_types = self.get_entity_list()
         self._entity_fields = {}
