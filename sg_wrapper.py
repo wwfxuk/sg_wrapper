@@ -208,7 +208,7 @@ class Shotgun(object):
 
     def get_entity_list(self):
         if not self.carbine:
-            entitySchema = _try(self._sg.schema_entity_read())
+            entitySchema = self._sg.schema_entity_read()
         else:
             entitySchema = carbine.carbineTableDescriptions
 
