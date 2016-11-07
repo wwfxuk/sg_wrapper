@@ -1093,7 +1093,7 @@ class Entity(object):
     def __init__(self, shotgun, entity_type, fields, carbine=None):
         self._entity_type = entity_type
         self._shotgun = shotgun
-        if shotgun.carbineLazyMode:
+        if carbine and shotgun.carbineLazyMode:
             self._fields = LazyDict(fields)
         else:
             self._fields = fields
