@@ -170,8 +170,29 @@ class Shotgun(object):
 
     def get_entity_fields(self, entityType):
         if entityType not in self._entity_fields:
-            self._entity_fields[entityType] = self._sg.schema_field_read(entityType)
+            # truncate schema_field_read result - only keep what we use
+            d = {}
+            for field, fieldDict in self._sg.schema_field_read(entityType).items():
+                d[field] = {
+                    k: v['value']
+                    for k, v in fieldDict.items()
+                    if k in ['editable', 'data_type'] and 'value' in v
+                }
+
+                display_values = fieldDict                       \
+                                    .get('properties', {})       \
+                                    .get('display_values', {})   \
+                                    .get('value')
+
+                if display_values:
+                    d[field]['display_values'] = display_values
+
+            self._entity_fields[entityType] = d
+
         return self._entity_fields[entityType]
+
+    def get_valid_values(self, entityType, field):
+        return self.get_entity_fields(entityType)[field].get('display_values')
 
     def is_entity(self, entityType):
         for e in self._entity_types:
