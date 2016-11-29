@@ -8,16 +8,10 @@ requires = [
 
 custom = {
         'description': 'Wrapper around shotgun',
-        'doc': '',
-        'wiki': 'http://wiki.mikros.int/doku.php?id=anim:dev:sg_wrapper',
-        'wikiOthers': [],
-        'authors': ['syd'],
-        'authorEmails': ['syd@mikrosimage.eu'],
-        'maintainers': ['syd'],
-        'maintainerEmails': ['syd@mikrosimage.eu'],
-        'sourcePackage': '',
-        'deployStrategy': 'git',
-        'synchroStrategy': 'git',
+        # 'doc': '',
+        # 'wiki': 'http://wiki.mikros.int/doku.php?id=anim:dev:sg_wrapper',
+        'authors': ['syd', 'jbi'],
+        'maintainers': ['syd', 'jbi'],
         }
 
 def commands():
