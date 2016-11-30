@@ -1,13 +1,15 @@
 Changelog Api
 =============
 
+.. note:: Version 1.3.2 and before is kept here, even though they may not strictly
+          be changes to the API
+
 Releases
 --------
 
 Version dev
 ```````````
 - Added logger to (`_log`) :mod:`sg_wrapper`
-    - Added debug messages
 
 Version 1.3.2
 `````````````
