@@ -1,11 +1,15 @@
 import copy
 import os
+from corePython import logger
 import sys
 import time
 
 import shotgun_api3
 
 from sg_wrapper_util import string_to_uuid, get_calling_script
+
+_log = logger.getLogger('sg_wrapper')
+
 
 # The Primary Text Keys are the field names to check when not defined.
 # For example, calling sg.Project("my_project") will be the same as sg.Project(code = "my_project")
@@ -749,9 +753,20 @@ class Shotgun(object):
             _entitiesDict = entitiesDict.copy()
 
             for entityId, entity in _entitiesDict.iteritems():
+                # Avoid processing debug message formatting if not debugging
+                if _log.getLevel() == 'dbg':
+                    _log.debug("{} : {} {}".format("entityId", entityId, type(entityId)))
+                    _log.debug("{} : {} {}".format("entity", entity, type(entity)))
+                    _log.debug("    entity_type : {} {}".format(entity.entity_type(),
+                                                                type(entity.entity_type())))
+                    _log.debug("    fields : {} {}".format(entity.fields(),
+                                                           type(entity.fields())))
+                    for field in sorted(entity.fields()):
+                        value = entity.field(field)
+                        _log.debug("    (field) {:>10} : {} {}"
+                                   "".format(field, value, type(value)))
 
                 for field in entity.fields():
-
                     if field in ['type', 'id']:
                         continue
 

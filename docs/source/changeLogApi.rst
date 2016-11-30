@@ -4,8 +4,13 @@ Changelog Api
 Releases
 --------
 
+Version dev
+```````````
+- Added logger to (`_log`) :mod:`sg_wrapper`
+    - Added debug messages
+
 Version 1.3.2
-````````````````
+`````````````
 - sg_wrapper_util.get_calling_script: Ignore ipython from the stacktrace
 
 Version rc-1.3.1
