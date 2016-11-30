@@ -765,6 +765,10 @@ class Shotgun(object):
                         value = entity.field(field)
                         _log.debug("    (field) {:>10} : {} {}"
                                    "".format(field, value, type(value)))
+                # Catch for invalid IDs (shotgun ticket 6100)
+                if entityId < 0:
+                    raise ValueError('{} entity "{}" has an invalid id: {}'
+                                     ''.format(entity.entity_type(), entity.field('code'), entityId))
 
                 for field in entity.fields():
                     if field in ['type', 'id']:
