@@ -360,8 +360,12 @@ class Shotgun(object):
         for arg in kwargs:
             filters[arg] = self.get_entity_description(kwargs[arg])
 
+        # only fetch from cache if no other filters were specified
+        # TODO we could also fetch from cache if an id is given and if we already got all
+        # the necessary fields to check if we need to prune a cache value, if any other filter
+        # does not correspond to the cached fields
         entities_from_cache = []
-        if 'id' in filters and len(filters) == 1:  # only fetch from cache if no other filters were specified
+        if 'id' in filters and len(filters) == 1:
             if thisEntityType in self._entities:
 
                 if not isinstance(filters['id'], tuple):
