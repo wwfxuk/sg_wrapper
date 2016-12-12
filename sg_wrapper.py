@@ -1169,7 +1169,12 @@ class Entity(object):
     def __init__(self, shotgun, entity_type, fields, carbine=None):
         self._entity_type = entity_type
         self._shotgun = shotgun
-        if carbine and shotgun.carbineLazyMode:
+
+        # lazy dict if:
+        #   sgw lazy mode is activated
+        #   +  either carbine is forced on this entity
+        #     or carbine is not force-disabled on this entity AND sgw default requester is carbine
+        if shotgun.carbineLazyMode and (carbine == True or (carbine != False and shotgun.carbine)):
             self._fields = LazyDict(fields)
         else:
             self._fields = fields
