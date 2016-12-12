@@ -1,5 +1,7 @@
 import copy
 import os
+import sys
+import time
 
 import shotgun_api3
 
@@ -73,31 +75,46 @@ class retryWrapper(shotgun_api3.Shotgun):
         Subclasses shotgun_api3.Shotgun forces us to use getattribute instead of getattr but
         it allow isinstance to make the wrapper transparent
     '''
-    def __init__(self, sg, maxConnectionAttempts, retrySleep, printInfo):
+    def __init__(self, sg, maxConnectionAttempts, retrySleep, printInfo, exceptionType):
         self._sg = sg
         self.maxConnectionAttempts = maxConnectionAttempts
         self.retrySleep = retrySleep
         self.printInfo = printInfo
+        self.exceptionType = exceptionType
 
     def __getattribute__(self, attr):
         self_sg = object.__getattribute__(self, '_sg')
         if not hasattr(self_sg, attr):
             return object.__getattribute__(self, attr)
 
-        errorCount = 0
-        while True:
-            try:
-                return self._sg.__getattribute__(attr)
-            except shotgun_api3.lib.xmlrpclib.ProtocolError, err:
-                errorCount += 1
-                if errorCount >= self.maxConnectionAttempts:
-                    raise
+        attribute = self._sg.__getattribute__(attr)
+        if not callable(attribute):
+            return attribute
 
-                if self.printInfo:
-                    print '[sg_wrapper] Connection error [%d/%d]: %s' \
-                            % (errorCount, self.maxConnectionAttempts, str(err))
+        def retryHook(*args, **kwargs):
+            errorCount = 0
+            while True:
+                try:
+                    res = attribute(*args, **kwargs)
+                    break
 
-                time.sleep(self.retrySleep)
+                except self.exceptionType, err:
+                    errorCount += 1
+                    if errorCount == self.maxConnectionAttempts:
+                        raise
+
+                    if self.printInfo:
+                        print '[sg_wrapper] Connection error [%d/%d]: %s' \
+                              % (errorCount, self.maxConnectionAttempts, str(err))
+
+                    time.sleep(self.retrySleep)
+
+            # prevent Shotgun instance returning itself to unwrap
+            if res == self._sg:
+                return self
+            return res
+
+        return retryHook
 
 
 # This is the base Shotgun class. Everything is created from here, and it deals with talking to the
@@ -116,7 +133,14 @@ class Shotgun(object):
         else:
             raise RuntimeError('init requires a shotgun object or server, script name and key')
 
-        self._sg = retryWrapper(self._sg, maxConnectionAttempts, retrySleep, printInfo)
+        # wrap shotgun api around around a retry hook, to avoid crashes due to 503 errors
+        # the error to catch is a ProtocolError from the shotgun api, which is either
+        # the standard shotgunPythonApi module, or tkCore.tank_vendor.shotgun_api3
+        # so we try to get the error type in the imported module, and we only wrap the api if we could
+        shotgun_api_module = self._sg.__module__
+        if shotgun_api_module in sys.modules:
+            exceptionType = sys.modules[shotgun_api_module].ProtocolError
+            self._sg = retryWrapper(self._sg, maxConnectionAttempts, retrySleep, printInfo, exceptionType)
 
         self._entity_types = self.get_entity_list()
         self._entity_fields = {}
