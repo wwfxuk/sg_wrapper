@@ -839,12 +839,7 @@ class Entity(object):
                 attribute = currentFields[fieldName]
                 if type(attribute) == dict and 'id' in attribute and 'type' in attribute:
                     if 'entity' not in attribute:
-
-                        if fields:
-                            attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'], fields=fields)
-                        else:
-                            attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'])
-                        #attribute['entity'] = Entity(self._shotgun, attribute['type'], {'id': attribute['id']})
+                        attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'])
                     return attribute['entity']
                 elif type(attribute) == list:
                     iterator = self.list_iterator(currentFields[fieldName], fields)
@@ -857,21 +852,37 @@ class Entity(object):
 
         raise AttributeError("Entity '%s' has no field '%s'" % (self._entity_type, fieldName))
 
-    def list_iterator(self, entities, fields):
+    def list_iterator(self, entities, fields, batch_requests=True):
+        # TODO atm it only fetches the new entity if it has not already been fetched
+        # but it should also check if every required fields are available in the pre-fetched entities
+
+        if batch_requests:
+            # batch the find_entity requests by entity type
+            # to avoid making one request per entity to fetch
+            to_fetch = {}
+            for e in entities:
+                if not isinstance(e, (basestring, Entity)) and 'entity' not in e:
+                    if e['type'] not in to_fetch:
+                        to_fetch[e['type']] = []
+                    to_fetch[e['type']].append(e)
+
+            for tf_type, tf_entities in to_fetch.iteritems():
+                entity_ids = [e['id'] for e in tf_entities]
+                entities = self._shotgun.find_entity(tf_type, id=('in', entity_ids), fields=fields, find_one=False)
+                res_by_id = {e['id']: e for e in entities}
+                for e in tf_entities:
+                    e['entity'] = res_by_id.get(e['id'])
 
         for entity in entities:
 
             # ie for Asset.tag_list (list of str) or for Asset.tasks (list of sg_wrapper.Entity)
-            if isinstance(entity, basestring) or isinstance(entity, Entity):
+            if isinstance(entity, (basestring, Entity)):
                 yield entity
                 # Warning: do not remove it or iterator will break (ie for tag_list)
                 continue
 
             if 'entity' not in entity:
-                if fields:
-                    entity['entity'] = self._shotgun.find_entity(entity['type'], id = entity['id'], fields=fields)
-                else:
-                    entity['entity'] = self._shotgun.find_entity(entity['type'], id = entity['id'])
+                entity['entity'] = self._shotgun.find_entity(entity['type'], id = entity['id'], fields=fields)
 
             yield entity['entity']
 
