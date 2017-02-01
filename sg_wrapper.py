@@ -246,7 +246,41 @@ class Shotgun(object):
 
 
     def find_entity(self, entityType, key = None, find_one = True, fields = None,
-            order=None, exclude_fields = None, **kwargs):
+            order=None, exclude_fields = None, optional_filters=None, **kwargs):
+        ''' Find Shotgun entity
+
+        :param optional_filters: filters only applied when the result is not available from the cache
+        :type optional_filters: dict
+
+        .. note::
+            the optional_filters params allows to bypass some of sg_wrapper's current cache limitations
+
+            usecase from DnD's SGRequester:
+
+                we automatically filter by project if the field exists in the entity
+                except if an entry already exists in sg_wrapper's cache
+                as if it already is in cache, it was put there by dnd, which always filters with
+                the project for its first request, so its always valid
+
+                sg_wrapper's 'optional_filters' argument allows this: it counts as a regular filter
+                for everything that could not be fetched from the cache
+
+                this allows better caching as sg_wrapper (atm) does not
+                fetch from cache if there is another filter than on 'id'
+                and thats the case if we pass the project's filter in the initial request
+
+                this gives better performances as the _find_entiy function is mostly used by State
+                which mostly filters by a set of ids and nothing else - except for the project filter added here
+
+                its also useful for some updates done by dnd (ex: the Task statuses)
+                as the update using sg_wrapper also updates its cache
+                and if the project filter was set regularly, it would not it the cache, and the
+                request would pass along to carbine, which takes about a second to update from Shotgun
+                if the _find_entity is used right after the update, the returned result would
+                use carbine's value, not updated (as it takes about a second), and not the new value
+                we just updated the entity with
+        '''
+
         filters = {}
 
         thisEntityType = None
@@ -316,6 +350,9 @@ class Shotgun(object):
                     # not everything has been found: prune found values & search for the rest
                     filters['id'] = (op, missing_value_from_cache)
 
+        if optional_filters:
+            for fname, fval in optional_filters.iteritems():
+                filters[fname] = self.get_entity_description(fval)
 
         if not fields:
             fields = self.get_entity_field_list(thisEntityType)
