@@ -75,10 +75,11 @@ class retryWrapper(shotgun_api3.Shotgun):
         Subclasses shotgun_api3.Shotgun forces us to use getattribute instead of getattr but
         it allow isinstance to make the wrapper transparent
     '''
-    def __init__(self, sg, maxConnectionAttempts, retrySleep, printInfo, exceptionType):
+    def __init__(self, sg, maxConnectionAttempts, retryInitialSleep, retrySleepMultiplier, printInfo, exceptionType):
         self._sg = sg
         self.maxConnectionAttempts = maxConnectionAttempts
-        self.retrySleep = retrySleep
+        self.retryInitialSleep = retryInitialSleep
+        self.retrySleepMultiplier = retrySleepMultiplier
         self.printInfo = printInfo
         self.exceptionType = exceptionType
 
@@ -93,6 +94,7 @@ class retryWrapper(shotgun_api3.Shotgun):
 
         def retryHook(*args, **kwargs):
             errorCount = 0
+            sleepDuration = self.retryInitialSleep
             while True:
                 try:
                     res = attribute(*args, **kwargs)
@@ -104,10 +106,11 @@ class retryWrapper(shotgun_api3.Shotgun):
                         raise
 
                     if self.printInfo:
-                        print '[sg_wrapper] Connection error [%d/%d]: %s' \
-                              % (errorCount, self.maxConnectionAttempts, str(err))
+                        print '[shotgun] Connection error [%d/%d] - will retry in %ss: %s' \
+                              % (errorCount, self.maxConnectionAttempts, sleepDuration, str(err))
 
-                    time.sleep(self.retrySleep)
+                    time.sleep(sleepDuration)
+                    sleepDuration *= self.retrySleepMultiplier
 
             # prevent Shotgun instance returning itself to unwrap
             if res == self._sg:
@@ -123,7 +126,7 @@ class Shotgun(object):
 
     def __init__(self, sgServer='', sgScriptName='', sgScriptKey='', sg=None,
                  disableApiAuthOverride=False, printInfo=True,
-                 maxConnectionAttempts=5, retrySleep=3,
+                 maxConnectionAttempts=8, retryInitialSleep=2, retrySleepMultiplier=2,
                  **kwargs):
 
         if sg:
@@ -140,7 +143,8 @@ class Shotgun(object):
         shotgun_api_module = self._sg.__module__
         if shotgun_api_module in sys.modules:
             exceptionType = sys.modules[shotgun_api_module].ProtocolError
-            self._sg = retryWrapper(self._sg, maxConnectionAttempts, retrySleep, printInfo, exceptionType)
+            self._sg = retryWrapper(self._sg, maxConnectionAttempts, retryInitialSleep, retrySleepMultiplier,
+                                    printInfo, exceptionType)
 
         self._entity_types = self.get_entity_list()
         self._entity_fields = {}
