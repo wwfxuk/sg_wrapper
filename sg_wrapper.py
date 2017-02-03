@@ -876,7 +876,9 @@ class Entity(object):
                 attribute = currentFields[fieldName]
                 if type(attribute) == dict and 'id' in attribute and 'type' in attribute:
                     if 'entity' not in attribute:
-                        attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'])
+                        attribute['entity'] = self._shotgun.find_entity(attribute['type'],
+                                                                        id=attribute['id'],
+                                                                        fields=fields)
                     return attribute['entity']
                 elif type(attribute) == list:
                     iterator = self.list_iterator(currentFields[fieldName], fields)
