@@ -1235,7 +1235,7 @@ class Entity(object):
     def entity_id(self):
         return self._entity_id
 
-    def field(self, fieldName, fields=None):
+    def field(self, fieldName, fields=None, carbine=None):
 
         ''' Get entity field
 
@@ -1262,10 +1262,13 @@ class Entity(object):
                 attribute = currentFields[fieldName]
                 if type(attribute) == dict and 'id' in attribute and 'type' in attribute:
                     if 'entity' not in attribute:
-                        attribute['entity'] = self._shotgun.find_entity(attribute['type'], id = attribute['id'], fields=fields, carbine=self._carbine)
+                        attribute['entity'] = self._shotgun.find_entity(attribute['type'],
+                                                                        id=attribute['id'],
+                                                                        fields=fields,
+                                                                        carbine=(carbine if carbine is not None else self._carbine))
                     return attribute['entity']
                 elif type(attribute) == list:
-                    iterator = self.list_iterator(currentFields[fieldName], fields)
+                    iterator = self.list_iterator(currentFields[fieldName], fields, carbine=carbine)
                     attrResult = []
                     for item in iterator:
                         attrResult.append(item)
@@ -1275,7 +1278,7 @@ class Entity(object):
 
         raise AttributeError("Entity '%s' has no field '%s'" % (self._entity_type, fieldName))
 
-    def list_iterator(self, entities, fields, batch_requests=True):
+    def list_iterator(self, entities, fields, batch_requests=True, carbine=None):
         # TODO atm it only fetches the new entity if it has not already been fetched
         # but it should also check if every required fields are available in the pre-fetched entities
 
@@ -1291,7 +1294,11 @@ class Entity(object):
 
             for tf_type, tf_entities in to_fetch.iteritems():
                 entity_ids = [e['id'] for e in tf_entities]
-                entities = self._shotgun.find_entity(tf_type, id=('in', entity_ids), fields=fields, carbine=self._carbine, find_one=False)
+                entities = self._shotgun.find_entity(tf_type,
+                                                     id=('in', entity_ids),
+                                                     fields=fields,
+                                                     carbine=(carbine if carbine is not None else self._carbine),
+                                                     find_one=False)
                 res_by_id = {e['id']: e for e in entities}
                 for e in tf_entities:
                     e['entity'] = res_by_id.get(e['id'])
@@ -1305,7 +1312,10 @@ class Entity(object):
                 continue
 
             if 'entity' not in entity:
-                entity['entity'] = self._shotgun.find_entity(entity['type'], id = entity['id'], fields=fields, carbine=self._carbine)
+                entity['entity'] = self._shotgun.find_entity(entity['type'],
+                                                             id=entity['id'],
+                                                             fields=fields,
+                                                             carbine=(carbine or self._carbine))
 
             yield entity['entity']
 
