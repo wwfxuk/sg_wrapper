@@ -747,26 +747,45 @@ class Shotgun(object):
                                         'local_path': os.path.join(linux_path, attr)
                                     }
 
-                    # shotgun does some bs with the thumbnail paths
-                    # the EventLogEntry does not give the right path (!), neither for a private nor for a public
-                    # so we override the bs he gives us here
+                    # shotgun does weird stuff with the thumbnail paths (signs it for the api, etc)
+                    # the EventLogEntry does not give the right path, neither for a private sg
+                    # nor for a public one
+                    # so we override it here
+                    # for a private, we forward it to the media server
+                    # for a non private, if the field contains the 'thumbnail id' (ie when its
+                    # updated by the event loop) or if contains an url to the local website,
+                    # we make a proper api type url & we generate a valid signature
+                    # otherwise we generate an url as the server usually does it for the web interface
                     elif field == 'image':
                         baseUrl = None
+                        normalizedUrl = None
+
                         # private => we got an env variable for the thumbnail url
                         if os.getenv('SHOTGUN_SITE_TYPE', 'cloud') != 'cloud':
                             baseUrl = os.getenv('SHOTGUN_THUMBNAIL_SERV_URL')
                             if baseUrl.endswith('/'):
                                 baseUrl = baseUrl[:-1]
+
                         # public => we dont have an env, so url env + hardcoded relative url for thumbnails
+                        # if its neither a single id, nor a previously signed url
                         else:
-                            rootUrl = os.getenv('SHOTGUN_URL')
-                            if rootUrl:
-                                if rootUrl.endswith('/'):
-                                    rootUrl = rootUrl[:-1]
-                                baseUrl = '%s/thumbnail' % rootUrl
+                            normalizedUrl = carbine.normalizeThumbnailUrl(
+                                self._sg,
+                                attr,
+                                returnNoneIfCannotSign=True,
+                            )
+
+                            if not normalizedUrl:
+                                rootUrl = os.getenv('SHOTGUN_URL')
+                                if rootUrl:
+                                    if rootUrl.endswith('/'):
+                                        rootUrl = rootUrl[:-1]
+                                    baseUrl = '%s/thumbnail' % rootUrl
 
                         # TODO if the thumbnail url format changes, we need to change it here
-                        if baseUrl:
+                        if normalizedUrl:
+                            attr = normalizedUrl
+                        elif baseUrl:
                             attr = '%s/%s/%s' % (baseUrl, entityType, row['id'])
                         else:
                             attr = None
