@@ -4,6 +4,7 @@ version = 'rc.0.0.0.mikros.2.0.9'
 requires = [
     'shotgunPythonApi',
     'carbine',
+    'inflection',
 ]
 
 custom = {

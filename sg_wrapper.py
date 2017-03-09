@@ -5,7 +5,11 @@ import sys
 import time
 
 import shotgun_api3
-from carbine import carbine
+import psycopg2
+import inflection  # pluralize + convert to CamelCase to snake_case
+
+conn = psycopg2.connect(database='int_mikros_shotgun_anim', user='carbine', password='peppergun', host='machete')
+cursor = conn.cursor()
 
 from sg_wrapper_util import string_to_uuid, get_calling_script
 
@@ -74,21 +78,47 @@ else:
 # TODO: every commented filters
 # shotgun filters: https://github.com/shotgunsoftware/python-api/wiki/Reference%3A-Filter-Syntax
 # peewee query operators: http://docs.peewee-orm.com/en/latest/peewee/querying.html#query-operators
+# operatorTranslation = {
+#     'is': lambda x, y: x == y,
+#     'is_not': operator.ne,
+#     'less_than': operator.lt,
+#     'greater_than': operator.gt,
+#     'contains': lambda x, y: x.contains(y),
+#     'not_contains': lambda x, y: ~(x.contains(y)),
+#     'starts_with': lambda x, y: x.startswith(y),
+#     'ends_with': lambda x, y: x.endswith(y),
+#     'between': lambda x, y: x.between(y[0], y[1]),
+#     'not_between': lambda x, y: ~(x.between(y[0], y[1])),
+#     # 'in_last',
+#     # 'in_next',
+#     'in': operator.lshift,
+#     'not_in': lambda x, y: ~(x << y),
+#     # 'type_is',
+#     # 'type_is_not',
+#     # 'in_calendar_day',
+#     # 'in_calendar_week',
+#     # 'in_calendar_month',
+#     # 'name_contains',
+#     # 'name_not_contains',
+#     # 'name_starts_with',
+#     # 'name_ends_with',
+# }
+
 operatorTranslation = {
-    'is': lambda x, y: x == y,
-    'is_not': operator.ne,
-    'less_than': operator.lt,
-    'greater_than': operator.gt,
-    'contains': lambda x, y: x.contains(y),
-    'not_contains': lambda x, y: ~(x.contains(y)),
-    'starts_with': lambda x, y: x.startswith(y),
-    'ends_with': lambda x, y: x.endswith(y),
-    'between': lambda x, y: x.between(y[0], y[1]),
-    'not_between': lambda x, y: ~(x.between(y[0], y[1])),
+    'is':           "%s = %%s",
+    'is_not':       "%s <> %%s",
+    'less_than':    "%s < %%s",
+    'greater_than': "%s > %%s",
+    'contains':     "%s like '%%%'||%%s||'%%%'",     # column like     %pattern%
+    'not_contains': "%s not like '%%%'||%%s||'%%%'", # column not like %pattern%
+    'starts_with':  "%s like %%s||'%%%'",           # column like      pattern%
+    'ends_with':    "%s like '%%%'||%%s",           # column like     %pattern
+    'between':      "%s between %%s and %%s",
+    'not_between':  "%s between %%s and %%s",
     # 'in_last',
     # 'in_next',
-    'in': operator.lshift,
-    'not_in': lambda x, y: ~(x << y),
+    'in':           "%s in %%s",
+    'not_in':       "%s not in %%s",
     # 'type_is',
     # 'type_is_not',
     # 'in_calendar_day',
@@ -175,10 +205,11 @@ class Shotgun(object):
         self.carbine = carbine
 
         # if carbine is wanted, try to connect, and fail if it is required
-        if carbine and not self.carbineConnectionTest():
-            self.carbine = None
-            if printInfo:
-                print 'Carbine connection failed. Falling back to shotgun connection'
+        # TODO
+        # if carbine and not self.carbineConnectionTest():
+        #     self.carbine = None
+        #     if printInfo:
+        #         print 'Carbine connection failed. Falling back to shotgun connection'
 
         self.carbineLazyMode = carbineLazyMode
         if not self.carbine:
@@ -210,14 +241,15 @@ class Shotgun(object):
         if not disableApiAuthOverride:
             self.update_auth_info(sgScriptName, printInfo=printInfo)
 
-    def carbineConnectionTest(self):
-        try:
-            carbine.db.connect()
-        except carbine.OperationalError:
-            if not self.carbine == 'required':
-                return False
-            raise
-        return True
+    # # TODO
+    # def carbineConnectionTest(self):
+    #     try:
+    #         carbine.db.connect()
+    #     except carbine.OperationalError:
+    #         if not self.carbine == 'required':
+    #             return False
+    #         raise
+    #     return True
 
     def pluralise(self, name):
         if name in customPlural:
@@ -230,7 +262,9 @@ class Shotgun(object):
         return name + "s"
 
     def get_entity_list(self):
-        if not self.carbine:
+        # TODO
+        # if not self.carbine:
+        if True:
             entitySchema = self._sg.schema_entity_read()
         else:
             entitySchema = carbine.carbineTableDescriptions
@@ -270,10 +304,87 @@ class Shotgun(object):
     def get_entity_fields(self, entityType):
         if entityType not in self._entity_fields:
 
-            if not self.carbine:
+            # TODO
+            cursor.execute("select name, properties from display_columns where entity_type = %s", (entityType,))
+            displayColumnRows = cursor.fetchall()
+            displayColumns = {}
+            import yaml
+            for r in displayColumnRows:
+                data = r[1]
+                # TODO is the first line always garbage?
+                # first line is "--- messy stuff", and seem not to be yaml, so we drop it
+                data = '\n'.join(data.split('\n')[1:])
+                # there is some "!ruby/hash:HashWithIndifferentAccess" about everywhere, and yaml does not like the exclamation point very much
+                data = data.replace("!ruby/hash:HashWithIndifferentAccess", '')
+                displayColumns[r[0]] = yaml.load(data)
+
+            cursor.execute("select table_name from information_schema.tables where table_schema = 'public'")
+            tableList = cursor.fetchall()
+            tableList = [t[0] for t in tableList]
+            tableName = inflection.pluralize(inflection.underscore(entityType))
+            if tableName not in tableList:
+                raise RuntimeError('Table %s does not exist - for entity type %s' % (tableName, entityType))
+
+            cursor.execute("select column_name from information_schema.columns where table_schema = 'public' and table_name = '%s'" % tableName)
+            availableFields = cursor.fetchall()
+            availableFields = [f[0] for f in availableFields]
+
+            # if not self.carbine:
+            if True:
                 # truncate schema_field_read result - only keep what we use
                 d = {}
                 for field, fieldDict in self._sg.schema_field_read(entityType).items():
+                    additionalInfos = {}
+
+                    entityTypeType = fieldDict['data_type']['value']
+                    linkedTable = None
+                    neededColumns = []
+                    if entityTypeType in ['entity', 'url']:
+                        neededColumns = [field + '_id', field + '_type']
+
+                    elif entityTypeType == 'multi_entity':
+                        if ':data_type_properties' in displayColumns[field]:
+                            if ':reverse_of' in displayColumns[field][':data_type_properties']:
+                                ro = displayColumns[field][':data_type_properties'][':reverse_of']
+                                if ro and ro.get(':entity_type_name') and ro.get(':name'):
+                                    linkedTable = inflection.pluralize(inflection.underscore(ro[':entity_type_name']))
+                                    additionalInfos['reverse'] = {
+                                        'table': linkedTable,
+                                        'field': ro[':name'],
+                                    }
+                                else:
+                                    print 'unimplemented DisplayColumn reverse_of type on %s %s: %s' % (tableName, field, ro)
+                                    continue
+
+                            elif ':flip_side_of' in displayColumns[field][':data_type_properties']:
+                                fso = displayColumns[field][':data_type_properties'][':flip_side_of']
+                                if fso and fso.get(':entity_type') and fso.get(':field_name'):
+                                    linkedTable = inflection.pluralize(inflection.underscore(fso[':entity_type']))
+                                    additionalInfos['flipSide'] = {
+                                        'table': linkedTable,
+                                        'field': fso[':field_name'],
+                                    }
+
+                                else:
+                                    print 'unimplemented DisplayColumn flip_side_of type on %s %s: %s' % (tableName, field, fso)
+                                    continue
+
+
+                        else:
+                            linkedTable = inflection.underscore(entityType) + '_' + field + '_connections'
+
+                    else:
+                        neededColumns = [field]
+
+                    if not all(c in availableFields for c in neededColumns):
+                        if entityTypeType not in ['summary', 'pivot_column']:
+                            print '%s (%s - %s) does not have the needed columns %s, for field %s' % (tableName, entityTypeType, entityType, neededColumns, field)
+                        continue
+
+                    if linkedTable and linkedTable not in tableList:
+                        print '%s (%s - %s) does not have the needed table %s, for field %s' % (tableName, entityTypeType, entityType, linkedTable, field)
+                        continue
+
                     d[field] = {
                         k: v['value']
                         for k, v in fieldDict.items()
@@ -287,6 +398,8 @@ class Shotgun(object):
 
                     if display_values:
                         d[field]['display_values'] = display_values
+
+                    d[field]['misc'] = additionalInfos
 
                 self._entity_fields[entityType] = d
 
@@ -397,6 +510,7 @@ class Shotgun(object):
 
 
         # EventLogEntry are not saved to carbine: bypass carbine & forward to sg api
+        # TODO
         entityCarbine = carbine  # for the future inner EventLogEntry entity requests
         if thisEntityType == 'EventLogEntry':
             carbine = False  # for the request
@@ -568,7 +682,7 @@ class Shotgun(object):
         # entityType <=> table name (! need to handle translation)
         # ~ select *fields from entityType
 
-        model = carbine.get_model(entityType)
+        # model = carbine.get_model(entityType)
 
         # TODO handle pseudo join fields (ie entity.Task.created_by.HumanUser.firstname)
         # TODO sometimes shotgun also returns the display name
@@ -580,52 +694,60 @@ class Shotgun(object):
 
         # TODO kinda meh way to handle paths
         pathRequested = False
-        if 'path' in fields and not model.getFieldType('path'):
-            if model.getFieldType('path_cache') and model.getFieldType('path_cache_storage'):
-                if 'path_cache' not in fields:
-                    fields.append('path_cache')
+        # if 'path' in fields and not model.getFieldType('path'):
+        #     if model.getFieldType('path_cache') and model.getFieldType('path_cache_storage'):
+        #         if 'path_cache' not in fields:
+        #             fields.append('path_cache')
 
-                if 'path_cache_storage' not in fields:
-                    fields.append('path_cache_storage')
+        #         if 'path_cache_storage' not in fields:
+        #             fields.append('path_cache_storage')
 
-                fields.remove('path')
-                pathRequested = True
+        #         fields.remove('path')
+        #         pathRequested = True
 
 
+        entityTypeFields = self.get_entity_fields(entityType)
         for field in fields:
-            fieldtype = model.getFieldType(field)
+            # if field in ['image', 'duration', 'billboard', 'end_date', 'current_user_favorite', 'last_accessed_by_current_user', 'start_date', 'filmstrip_image', 'tag_list']:  # TODO
+            #     continue
 
-            if fieldtype == 'Primitive':
-                queryFields.append(getattr(model, field))
+            fieldtype = entityTypeFields[field]['data_type']
 
-            elif fieldtype == 'Entity':
-                queryFields.append(getattr(model, field + "__type"))
-                queryFields.append(getattr(model, field + "__id"))
+            # TODO should be joined here
+            if fieldtype in ['entity', 'url']:  # url is internally an attachment
+                queryFields.append(field + "_type")
+                queryFields.append(field + "_id")
 
-            elif fieldtype == 'MultiEntity':
+            elif fieldtype == 'multi_entity':
                 # join
                 # handled later
                 pass
 
-        query = model.select(*queryFields)
+            else:  # primitive
+                queryFields.append(field)
+
+
+        tableName = inflection.pluralize(inflection.underscore(entityType))
+        # should be safe against injections as if the field does not exist entityTypeFields[field] will crash
+        query = 'select %s from %s' % (','.join(queryFields), tableName)
+        queryData = []
+        # query = model.select(*queryFields)
         # print 'select query: %s' % query
 
         # TODO handle foreign key
         # TODO handle pseudo join
-        fullFilter = None
+        fullFilters = []
+        fullFilters.append('retirement_date is null')
         for _filter in filters:
             field, relation, values = _filter
             if relation not in operatorTranslation.keys():
                 raise RuntimeError('operation %s is not handled (yet!) by sg_wrapper using carbine' % relation)
 
-            fieldtype = model.getFieldType(field)
+            fieldtype = entityTypeFields[field]['data_type']
 
-            filterToAdd = None
+            filtersToAdd = []
 
-            if fieldtype == 'Primitive':
-                filterToAdd = operatorTranslation[relation](getattr(model, field), values)
-
-            elif fieldtype == 'Entity':
+            if fieldtype in ['url', 'entity']:  # TODO handle url special case
                 # TODO atm only supporting filter on id & type
 
                 if isinstance(values, list):
@@ -641,111 +763,140 @@ class Shotgun(object):
                         typeValues[_type].add(value.get('id'))
 
                     for t, ids in typeValues.iteritems():
-                        subfilter = None
+                        subfilters = []
 
                         if ids:
-                            subfilter = operatorTranslation[relation](
-                                getattr(model, field + "__id"), list(ids))
+                            subfilters.append(operatorTranslation[relation] % (field + '_id'))
+                            queryData += [list(ids)]
 
                         if t:
-                            if not subfilter:
-                                subfilter = getattr(model, field + "__type") == t
-                            else:
-                                subfilter = subfilter & (getattr(model, field + "__type") == t)
+                            subfilters += ["%s = %%s" % (field + '_type')]
+                            queryData += [t]
 
-                        if not filterToAdd:
-                            filterToAdd = subfilter
-                        else:
-                            filterToAdd = filterToAdd | subfilter
+                        filtersToAdd += subfilters
 
                 elif isinstance(values, dict):
                     if 'id' in values:
-                        filterToAdd = operatorTranslation[relation](
-                            getattr(model, field + "__id"), values['id'])
+                        filtersToAdd.append(operatorTranslation[relation] % (field + '_id'))
+                        queryData += [values['id']]
 
                     if 'type' in values:
-                        secondFilter = operatorTranslation[relation](
-                            getattr(model, field + "__type"), values['type'])
-
-                        if not filterToAdd:
-                            filterToAdd = secondFilter
-                        else:
-                            filterToAdd = filterToAdd & secondFilter
+                        filtersToAdd.append(operatorTranslation[relation] % (field + '_type'))
+                        queryData += [values['type']]
 
                 else:
                     raise RuntimeError('filtering on a link without something else than a dict is not supported (yet)')
 
-            elif fieldtype == 'MultiEntity':
-                # TODO atm only support filter on id & type
+            elif fieldtype == 'multi_entity':
+                # TODO
                 raise RuntimeError('MultiEntity filters not supported')
 
-            if not fullFilter:
-                fullFilter = filterToAdd
-            else:
-                fullFilter = fullFilter & filterToAdd
+            else:  # primitive
+                filtersToAdd.append(operatorTranslation[relation] % field)
+                queryData += [values]
 
-        if fullFilter:
-            try:
-                query = query.where(fullFilter)
-            except:
-                print "query: %s" % query
-                print "filter: %s %s %s" % (field, relation, values)
-                print "operation translation: %s" % operatorTranslation[relation]
-                raise
+            fullFilters += filtersToAdd
+
+        if fullFilters:
+            # try:
+            query += ' where ' + " and ".join("(%s)" % f for f in fullFilters)
+            # query = query.where(fullFilter)
+            # except:
+            #     print "query: %s" % query
+            #     print "filter: %s %s %s" % (field, relation, values)
+            #     print "operation translation: %s" % operatorTranslation[relation]
+            #     raise
 
         # print 'filter query: %s' % query
 
 
         if order:
+            orders = []
             for orderRule in order:
-                orderAttr = getattr(model, orderRule['field_name'])
-                if orderRule.get('direction') == 'desc':
-                    orderAttr = orderAttr.desc()
-                query = query.order_by(orderAttr)
+                orders += "%s %s" % (orderRule['field_name'], orderRule.get('direction', 'asc'))
+            query += " order by " + ", ".join(orders)
 
         if find_one:
-            query = query.limit(1)
+            query += " limit 1"
+            # query = query.limit(1)
 
-
-        # print "query: %s" % query
+        print "query: %s" % query
+        print "query data: %s" % queryData
 
         res = []
         # TODO sometimes shotgun returns the display name (dunno why, dunno when) on nested structs
         # in addition to the type & the id
-        query = query.dicts()
-        dbRes = query.execute()
-        for row in dbRes:
+        # query = query.dicts()
+        dbRes = cursor.execute(query, queryData)
+        for row in cursor.fetchall():
             formattedRow = {
                 'type': entityType
             }
 
+            def getField(field):
+                try:
+                    idx = queryFields.index(field)
+                except ValueError:  # field not found
+                    return None
+                else:
+                    return row[idx]
+
             for field in fields:
                 attr = None
-                fieldtype = model.getFieldType(field)
+                fieldtype = entityTypeFields[field]['data_type']
 
-                if fieldtype == 'Primitive':
-                    attr = row.get(field)
+                if fieldtype == 'entity':
+                    entity_id = getField(field + '_id')
+                    if entity_id:
+                        entity_type = getField(field + '_type')
+
+                        attr = {
+                            'type': entity_type,
+                            'id': entity_id,
+                        }
+
+                    else:
+                        attr = None
+
+
+                elif fieldtype == 'multi_entity':
+                    # TODO
+                    # linkedTable = inflection.underscore(entityType) + '_' + field
+                    # subquery = linkedModel.select().where(linkedModel.origin == row['id'])
+
+                    # # print "\tsubquery: %s" % subquery
+
+                    # if not self.carbineLazyMode:
+                    #     attr = carbineMultiEntityGetter(subquery, sgw=self)
+
+                    # else:
+                    #     attr = LazyObject(carbineMultiEntityGetter, subquery, sgw=self)
+                    attr = None
+
+                else:  # primitive
+                    attr = getField(field)
 
                     if isinstance(attr, str):
                         attr = attr.encode('utf-8')
 
-                    # TODO thats kinda meh hack to handle the paths
-                    if(field == 'path_cache'
-                            # and ('path' not in fields or not model.getFieldType('path'))
-                            and 'path' not in fields
-                            and model.getFieldType('path_cache_storage') == 'Entity'):
+                    # TODO
+                    # # TODO thats kinda meh hack to handle the paths
+                    # if(field == 'path_cache'
+                    #         # and ('path' not in fields or not model.getFieldType('path'))
+                    #         and 'path' not in fields
+                    #         and model.getFieldType('path_cache_storage') == 'Entity'):
 
-                        pcs_id = row.get('path_cache_storage__id')
-                        pcs_type = row.get('path_cache_storage__type')
-                        if pcs_type and pcs_id:
-                            path_cache_storage = self.find_entity(pcs_type, key=pcs_id, find_one=True,
-                                                                  fields=['linux_path'], carbine=True)
-                            if path_cache_storage:
-                                linux_path = path_cache_storage._fields.get('linux_path')
-                                if linux_path:
-                                    formattedRow['path'] = {
-                                        'local_path': os.path.join(linux_path, attr)
-                                    }
+                    #     pcs_id = row.get('path_cache_storage__id')
+                    #     pcs_type = row.get('path_cache_storage__type')
+                    #     if pcs_type and pcs_id:
+                    #         path_cache_storage = self.find_entity(pcs_type, key=pcs_id, find_one=True,
+                    #                                               fields=['linux_path'], carbine=True)
+                    #         if path_cache_storage:
+                    #             linux_path = path_cache_storage._fields.get('linux_path')
+                    #             if linux_path:
+                    #                 formattedRow['path'] = {
+                    #                     'local_path': os.path.join(linux_path, attr)
+                    #                 }
 
                     # shotgun does weird stuff with the thumbnail paths (signs it for the api, etc)
                     # the EventLogEntry does not give the right path, neither for a private sg
@@ -769,13 +920,15 @@ class Shotgun(object):
                         # public => we dont have an env, so url env + hardcoded relative url for thumbnails
                         # if its neither a single id, nor a previously signed url
                         else:
-                            normalizedUrl = carbine.normalizeThumbnailUrl(
-                                self._sg,
-                                attr,
-                                returnNoneIfCannotSign=True,
-                            )
+                            # TODO
+                            # normalizedUrl = carbine.normalizeThumbnailUrl(
+                            #     self._sg,
+                            #     attr,
+                            #     returnNoneIfCannotSign=True,
+                            # )
 
-                            if not normalizedUrl:
+                            # if not normalizedUrl:
+                            if True:
                                 rootUrl = os.getenv('SHOTGUN_URL')
                                 if rootUrl:
                                     if rootUrl.endswith('/'):
@@ -786,38 +939,9 @@ class Shotgun(object):
                         if normalizedUrl:
                             attr = normalizedUrl
                         elif baseUrl:
-                            attr = '%s/%s/%s' % (baseUrl, entityType, row['id'])
+                            attr = '%s/%s/%s' % (baseUrl, entityType, getField('id'))
                         else:
                             attr = None
-
-                elif fieldtype == 'Entity':
-                    entity_id = row.get(field + "__id")
-                    if entity_id:
-
-                        entity_type = row.get(field + "__type")
-                        if isinstance(entity_type, str):
-                            entity_type = entity_type.encode('ascii', 'ignore'),
-
-                        attr = {
-                            'type': entity_type,
-                            'id': entity_id,
-                        }
-
-                    else:
-                        attr = None
-
-
-                elif fieldtype == 'MultiEntity':
-                    linkedModel = carbine.get_model(model.getLinkTable(field))
-                    subquery = linkedModel.select().where(linkedModel.origin == row['id'])
-
-                    # print "\tsubquery: %s" % subquery
-
-                    if not self.carbineLazyMode:
-                        attr = carbineMultiEntityGetter(subquery, sgw=self)
-
-                    else:
-                        attr = LazyObject(carbineMultiEntityGetter, subquery, sgw=self)
 
 
                 if attr or not formattedRow.get(field):
