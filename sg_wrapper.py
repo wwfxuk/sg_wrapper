@@ -139,6 +139,19 @@ specialConnections = {
 
 
 
+# usually single entity fields can be linked to multiple entity types
+# so there is an _id column & a _type column
+fixedEntityTypeTypes = {
+    'image': 'Thumbnail',
+    'path': 'Attachment',
+    'version': 'Version',
+    'published_file_type': 'PublishedFileType',
+    'step': 'Step',
+    'local_storage': 'LocalStorage',
+}
+
+
+
 class ShotgunWrapperError(Exception):
     pass
 
@@ -310,7 +323,7 @@ class Shotgun(object):
             displayColumns = {}
             import yaml
             for r in displayColumnRows:
-                data = r[1]
+                data = r[1] or ''
                 # TODO is the first line always garbage?
                 # first line is "--- messy stuff", and seem not to be yaml, so we drop it
                 data = '\n'.join(data.split('\n')[1:])
@@ -339,8 +352,10 @@ class Shotgun(object):
                     entityTypeType = fieldDict['data_type']['value']
                     linkedTable = None
                     neededColumns = []
-                    if entityTypeType in ['entity', 'url']:
-                        neededColumns = [field + '_id', field + '_type']
+                    if entityTypeType in ['entity', 'url', 'image']:
+                        neededColumns.append(field + '_id')
+                        if entityTypeType == 'entity' and field not in fixedEntityTypeTypes:
+                            neededColumns.append(field + '_type')
 
                     elif entityTypeType == 'multi_entity':
                         if ':data_type_properties' in displayColumns[field]:
@@ -351,11 +366,13 @@ class Shotgun(object):
                                     additionalInfos['reverse'] = {
                                         'table': linkedTable,
                                         'field': ro[':name'],
+                                        'destinationEntityType': ro[':entity_type_name'],
                                     }
                                 else:
-                                    print 'unimplemented DisplayColumn reverse_of type on %s %s: %s' % (tableName, field, ro)
+                                    print 'unimplemented DisplayColumn reverse_of type on %s %s: %s' % (tableName, field, ro)  # TODO
                                     continue
 
+                            # TODO we assume a field cant both be reverse_of + flip_side but we could be wrong
                             elif ':flip_side_of' in displayColumns[field][':data_type_properties']:
                                 fso = displayColumns[field][':data_type_properties'][':flip_side_of']
                                 if fso and fso.get(':entity_type') and fso.get(':field_name'):
@@ -363,17 +380,38 @@ class Shotgun(object):
                                     additionalInfos['flipSide'] = {
                                         'table': linkedTable,
                                         'field': fso[':field_name'],
+                                        'destinationEntityType': fso[':entity_type'],
                                     }
 
                                 else:
-                                    print 'unimplemented DisplayColumn flip_side_of type on %s %s: %s' % (tableName, field, fso)
+                                    print 'unimplemented DisplayColumn flip_side_of type on %s %s: %s' % (tableName, field, fso)  # TODO
                                     continue
 
-
-                        else:
+                        if not linkedTable:  # not one of the 2 cases above: standard connection table
                             linkedTable = inflection.underscore(entityType) + '_' + field + '_connections'
+                            linkedEntityTypes = fieldDict['properties']['valid_types']['value']
+                            if len(linkedEntityTypes) != 1:
+                                print '%s (%s - %s) is linked to none or too many entity types on field %s: %s' % (tableName, entityTypeType, entityType, field, linkedEntityTypes)
+                                continue
+                            linkedEntityType = linkedEntityTypes[0]
 
-                    else:
+                            sourceField = '%s_id' % inflection.underscore(entityType)
+                            destField = '%s_id' % inflection.underscore(linkedEntityType)
+
+                            # there seem to be a special case if both keys are on the same table
+                            # to differentiate both fields
+                            if linkedEntityType == entityType:
+                                sourceField = 'source_%s' % sourceField
+                                destField = 'dest_%s' % destField
+
+                            additionalInfos['connection'] = {
+                                'table': linkedTable,
+                                'sourceField': sourceField,
+                                'destinationField': destField,
+                                'destinationEntityType': linkedEntityType,
+                            }
+
+                    else:  # primitive
                         neededColumns = [field]
 
                     if not all(c in availableFields for c in neededColumns):
@@ -692,20 +730,6 @@ class Shotgun(object):
         if 'id' not in fields:
             fields.append('id')
 
-        # TODO kinda meh way to handle paths
-        pathRequested = False
-        # if 'path' in fields and not model.getFieldType('path'):
-        #     if model.getFieldType('path_cache') and model.getFieldType('path_cache_storage'):
-        #         if 'path_cache' not in fields:
-        #             fields.append('path_cache')
-
-        #         if 'path_cache_storage' not in fields:
-        #             fields.append('path_cache_storage')
-
-        #         fields.remove('path')
-        #         pathRequested = True
-
-
         entityTypeFields = self.get_entity_fields(entityType)
         for field in fields:
             # if field in ['image', 'duration', 'billboard', 'end_date', 'current_user_favorite', 'last_accessed_by_current_user', 'start_date', 'filmstrip_image', 'tag_list']:  # TODO
@@ -714,8 +738,9 @@ class Shotgun(object):
             fieldtype = entityTypeFields[field]['data_type']
 
             # TODO should be joined here
-            if fieldtype in ['entity', 'url']:  # url is internally an attachment
-                queryFields.append(field + "_type")
+            if fieldtype in ['entity', 'url', 'image']:  # url is internally an Attachment, and image is a Thumbnail
+                if fieldtype is 'entity' and field not in fixedEntityTypeTypes:
+                    queryFields.append(field + "_type")
                 queryFields.append(field + "_id")
 
             elif fieldtype == 'multi_entity':
@@ -747,7 +772,7 @@ class Shotgun(object):
 
             filtersToAdd = []
 
-            if fieldtype in ['url', 'entity']:  # TODO handle url special case
+            if fieldtype in ['image', 'url', 'entity']:  # TODO handle url special case
                 # TODO atm only supporting filter on id & type
 
                 if isinstance(values, list):
@@ -757,9 +782,14 @@ class Shotgun(object):
                     # list of dict, grouped by type, to avoid an overcomplicated query
                     typeValues = {}
                     for value in values:
-                        _type = value.get('type')
+                        if field in fixedEntityTypeTypes:
+                            _type = fixedEntityTypeTypes[field]
+                        else:
+                            _type = value.get('type')
+
                         if _type not in typeValues:
                             typeValues[_type] = set()
+
                         typeValues[_type].add(value.get('id'))
 
                     for t, ids in typeValues.iteritems():
@@ -767,9 +797,9 @@ class Shotgun(object):
 
                         if ids:
                             subfilters.append(operatorTranslation[relation] % (field + '_id'))
-                            queryData += [list(ids)]
+                            queryData += [tuple(ids)]
 
-                        if t:
+                        if t and field not in fixedEntityTypeTypes:
                             subfilters += ["%s = %%s" % (field + '_type')]
                             queryData += [t]
 
@@ -792,8 +822,10 @@ class Shotgun(object):
                 raise RuntimeError('MultiEntity filters not supported')
 
             else:  # primitive
+                if isinstance(values, list):
+                    values = tuple(values)
                 filtersToAdd.append(operatorTranslation[relation] % field)
-                queryData += [values]
+                queryData.append(values)
 
             fullFilters += filtersToAdd
 
@@ -845,10 +877,13 @@ class Shotgun(object):
                 attr = None
                 fieldtype = entityTypeFields[field]['data_type']
 
-                if fieldtype == 'entity':
+                if fieldtype in ['entity', 'url']:
                     entity_id = getField(field + '_id')
                     if entity_id:
-                        entity_type = getField(field + '_type')
+                        if field in fixedEntityTypeTypes:
+                            entity_type = fixedEntityTypeTypes[field]
+                        else:
+                            entity_type = getField(field + '_type')
 
                         attr = {
                             'type': entity_type,
@@ -858,45 +893,81 @@ class Shotgun(object):
                     else:
                         attr = None
 
-
                 elif fieldtype == 'multi_entity':
-                    # TODO
-                    # linkedTable = inflection.underscore(entityType) + '_' + field
+                    # at least 3 cases:
+                    # - reverse field (always of a mono entity field?)
+                    # - flip side of an multi entity field
+                    # - through a connection table
+                    subquery = ''
+                    subqueryData = []
+                    destinationEntityType = None
+
+                    if 'connection' in entityTypeFields[field]['misc']:
+                        infos = entityTypeFields[field]['misc']['connection']
+                        subquery = "select %s from %s" % (
+                                       infos['destinationField'],
+                                       infos['table'],
+                                   )
+                        subquery += " where %s = %%s" % infos['sourceField']
+                        subquery += " and retirement_date is null"
+                        subqueryData = [getField('id')]
+                        destinationEntityType = infos['destinationEntityType']
+                        # print 'connection =) %s, %s' % (subquery, subqueryData)
+
+                    elif 'reverse' in entityTypeFields[field]['misc']:
+                        infos = entityTypeFields[field]['misc']['reverse']
+                        subquery = "select id from %s" % infos['table']
+                        subquery += " where %s_id = %%s " % infos['field']
+                        subquery += " and %s_type = %%s " % infos['field']
+                        subquery += " and retirement_date is null"
+                        subqueryData = [getField('id'), entityType]
+                        destinationEntityType = infos['destinationEntityType']
+                        # print 'reverse =) %s, %s' % (subquery, subqueryData)
+
+                    elif 'flipSide' in entityTypeFields[field]['misc']:
+                        # inverse of 'connection' case
+                        infos = entityTypeFields[field]['misc']['flipSide']
+                        destEntityInfos = self.get_entity_fields(infos['destinationEntityType'])
+                        if infos['field'] not in destEntityInfos:
+                            # print 'flipside field not found: %s not in %s' % (infos['field'], infos['destinationEntityType'])
+                            pass
+
+                        else:
+                            infoLink = destEntityInfos[infos['field']]['misc']['connection']
+                            subquery = "select %s from %s" % (infoLink['sourceField'], infoLink['table'])
+                            subquery += " where %s = %%s" % infoLink['destinationField']
+                            # subquery += " and   %s_type = %s" % (infos['field'], entityType)
+                            subquery += " and retirement_date is null"
+                            subqueryData = [getField('id')]
+                            destinationEntityType = infos['destinationEntityType']
+                            # print 'flip side =) %s, %s' % (subquery, subqueryData)
+
+                    else:
+                        raise RuntimeError('Unknown multi entity subtype on %s.%s: %s' % (tableName, field, entityTypeFields[field]))
+
+                    # destinationEntityType = infos['destinationEntityType']
                     # subquery = linkedModel.select().where(linkedModel.origin == row['id'])
 
                     # # print "\tsubquery: %s" % subquery
 
-                    # if not self.carbineLazyMode:
-                    #     attr = carbineMultiEntityGetter(subquery, sgw=self)
+                    if subquery:
+                        if not self.carbineLazyMode:
+                            attr =            carbineMultiEntityGetter( self, subquery, subqueryData, destinationEntityType)
+                        else:
+                            attr = LazyObject(carbineMultiEntityGetter, self, subquery, subqueryData, destinationEntityType)
+                    else:
+                        attr = None
 
-                    # else:
-                    #     attr = LazyObject(carbineMultiEntityGetter, subquery, sgw=self)
-                    attr = None
+                elif fieldtype == 'image':
+                    # TODO
+                    # atm we just retrieve it from Shotgun as we're not allowed to sign it
+                    # TODO we could at least batch this =(  cause atm is really really slow
+                    attr = None  # disable images as its too slow....
+                    # sgEntity = self.find_entity(entityType, id=getField('id'), fields=['image'], carbine=False)
+                    # attr = None if not sgEntity else sgEntity.image
 
                 else:  # primitive
                     attr = getField(field)
-
-                    if isinstance(attr, str):
-                        attr = attr.encode('utf-8')
-
-                    # TODO
-                    # # TODO thats kinda meh hack to handle the paths
-                    # if(field == 'path_cache'
-                    #         # and ('path' not in fields or not model.getFieldType('path'))
-                    #         and 'path' not in fields
-                    #         and model.getFieldType('path_cache_storage') == 'Entity'):
-
-                    #     pcs_id = row.get('path_cache_storage__id')
-                    #     pcs_type = row.get('path_cache_storage__type')
-                    #     if pcs_type and pcs_id:
-                    #         path_cache_storage = self.find_entity(pcs_type, key=pcs_id, find_one=True,
-                    #                                               fields=['linux_path'], carbine=True)
-                    #         if path_cache_storage:
-                    #             linux_path = path_cache_storage._fields.get('linux_path')
-                    #             if linux_path:
-                    #                 formattedRow['path'] = {
-                    #                     'local_path': os.path.join(linux_path, attr)
-                    #                 }
 
                     # shotgun does weird stuff with the thumbnail paths (signs it for the api, etc)
                     # the EventLogEntry does not give the right path, neither for a private sg
@@ -907,48 +978,45 @@ class Shotgun(object):
                     # updated by the event loop) or if contains an url to the local website,
                     # we make a proper api type url & we generate a valid signature
                     # otherwise we generate an url as the server usually does it for the web interface
-                    elif field == 'image':
-                        baseUrl = None
-                        normalizedUrl = None
+                    # if field == 'image':
+                    #     baseUrl = None
+                    #     normalizedUrl = None
 
-                        # private => we got an env variable for the thumbnail url
-                        if os.getenv('SHOTGUN_SITE_TYPE', 'cloud') != 'cloud':
-                            baseUrl = os.getenv('SHOTGUN_THUMBNAIL_SERV_URL')
-                            if baseUrl.endswith('/'):
-                                baseUrl = baseUrl[:-1]
+                    #     # private => we got an env variable for the thumbnail url
+                    #     if os.getenv('SHOTGUN_SITE_TYPE', 'cloud') != 'cloud':
+                    #         baseUrl = os.getenv('SHOTGUN_THUMBNAIL_SERV_URL')
+                    #         if baseUrl.endswith('/'):
+                    #             baseUrl = baseUrl[:-1]
 
-                        # public => we dont have an env, so url env + hardcoded relative url for thumbnails
-                        # if its neither a single id, nor a previously signed url
-                        else:
-                            # TODO
-                            # normalizedUrl = carbine.normalizeThumbnailUrl(
-                            #     self._sg,
-                            #     attr,
-                            #     returnNoneIfCannotSign=True,
-                            # )
+                    #     # public => we dont have an env, so url env + hardcoded relative url for thumbnails
+                    #     # if its neither a single id, nor a previously signed url
+                    #     else:
+                    #         # TODO
+                    #         # normalizedUrl = carbine.normalizeThumbnailUrl(
+                    #         #     self._sg,
+                    #         #     attr,
+                    #         #     returnNoneIfCannotSign=True,
+                    #         # )
 
-                            # if not normalizedUrl:
-                            if True:
-                                rootUrl = os.getenv('SHOTGUN_URL')
-                                if rootUrl:
-                                    if rootUrl.endswith('/'):
-                                        rootUrl = rootUrl[:-1]
-                                    baseUrl = '%s/thumbnail' % rootUrl
+                    #         # if not normalizedUrl:
+                    #         if True:
+                    #             rootUrl = os.getenv('SHOTGUN_URL')
+                    #             if rootUrl:
+                    #                 if rootUrl.endswith('/'):
+                    #                     rootUrl = rootUrl[:-1]
+                    #                 baseUrl = '%s/thumbnail' % rootUrl
 
-                        # TODO if the thumbnail url format changes, we need to change it here
-                        if normalizedUrl:
-                            attr = normalizedUrl
-                        elif baseUrl:
-                            attr = '%s/%s/%s' % (baseUrl, entityType, getField('id'))
-                        else:
-                            attr = None
+                    #     # TODO if the thumbnail url format changes, we need to change it here
+                    #     if normalizedUrl:
+                    #         attr = normalizedUrl
+                    #     elif baseUrl:
+                    #         attr = '%s/%s/%s' % (baseUrl, entityType, getField('id'))
+                    #     else:
+                    #         attr = None
 
 
                 if attr or not formattedRow.get(field):
                     formattedRow[field] = attr
-
-            if pathRequested and not 'path' in formattedRow:
-                formattedRow['path'] = None
 
             res.append(formattedRow)
 
@@ -1397,8 +1465,21 @@ class Entity(object):
         # are dynamic and not described in the schema making sg_wrapper
         # go wrong.
         toVisit = [self._fields]
-        if self._entity_type == 'Attachment':
+        isCarbineActive = carbine if carbine is not None else self._carbine
+
+        if isCarbineActive is None:
+            isCarbineActive = self._shotgun.carbine
+
+        if not isCarbineActive and self._entity_type == 'Attachment':   # not working with carbine v2
             toVisit.append(self._fields['this_file'])
+
+        # on-the-fly local_path creation for attachments
+        if isCarbineActive is not None and self._entity_type == 'Attachment' and fieldName == 'local_path':
+            local_storage = self.field('local_storage', fields=['linux_path'], carbine=carbine)
+            if not local_storage or not local_storage.linux_path:
+                return None
+            else:
+                return os.path.join(local_storage.linux_path, self.field('display_name'))
 
         for currentFields in toVisit:
             if fieldName in currentFields:
@@ -1408,10 +1489,10 @@ class Entity(object):
                         attribute['entity'] = self._shotgun.find_entity(attribute['type'],
                                                                         id=attribute['id'],
                                                                         fields=fields,
-                                                                        carbine=(carbine if carbine is not None else self._carbine))
+                                                                        carbine=isCarbineActive)
                     return attribute['entity']
                 elif type(attribute) == list:
-                    iterator = self.list_iterator(currentFields[fieldName], fields, carbine=carbine)
+                    iterator = self.list_iterator(currentFields[fieldName], fields, carbine=isCarbineActive)
                     attrResult = []
                     for item in iterator:
                         attrResult.append(item)
@@ -1615,34 +1696,38 @@ class Entity(object):
         self.__dict__.update(adict)
 
 
-def carbineMultiEntityGetter(subquery, sgw):
+def carbineMultiEntityGetter(sgw, subquery, subqueryData, destinationEntityType):
     res = []
-    for linkedEntity in subquery:
-        if linkedEntity.dest__id:
-            row = {}
-            innerField = specialConnections.get(linkedEntity.dest__type)
+    cursor.execute(subquery, subqueryData)
+    for linkedEntity in cursor.fetchall():  # rows with only the destination id column
+        row = {}
+        # innerField = specialConnections.get(linkedEntity.dest__type)
+        # TODO handle special connections
 
-            if innerField:
-                outerEntity = sgw.find_entity(linkedEntity.dest__type, id=linkedEntity.dest__id, fields=[innerField], carbine=True)
-                if innerField not in outerEntity._fields.keys():
-                    raise AttributeError("Entity '%s' has no inner field '%s'"
-                                         % (linkedEntity.dest__type, innerField))
+#         if innerField:
+#             outerEntity = sgw.find_entity(linkedEntity.dest__type, id=linkedEntity.dest__id, fields=[innerField], carbine=True)
+#             if innerField not in outerEntity._fields.keys():
+#                 raise AttributeError("Entity '%s' has no inner field '%s'"
+#                                      % (linkedEntity.dest__type, innerField))
 
-                innerEntity = outerEntity[innerField]
-                if 'type' not in innerEntity._fields.keys() or 'id' not in innerEntity._fields.keys():
-                       raise AttributeError("Entity '%s' has a malformed inner field '%s' (missing either id or type)"
-                                            % (linkedEntity.dest__type, innerField, innerEntity))
-                row['type'] = innerEntity['type'].encode('ascii', 'ignore')
-                row['id'] = innerEntity['id']
+#             innerEntity = outerEntity[innerField]
+#             if 'type' not in innerEntity._fields.keys() or 'id' not in innerEntity._fields.keys():
+#                    raise AttributeError("Entity '%s' has a malformed inner field '%s' (missing either id or type)"
+#                                         % (linkedEntity.dest__type, innerField, innerEntity))
+#             row['type'] = innerEntity['type'].encode('ascii', 'ignore')
+#             row['id'] = innerEntity['id']
 
-            else:
-                if isinstance(linkedEntity.dest__type, str):
-                    row['type'] = linkedEntity.dest__type.encode('ascii', 'ignore')
-                else:
-                    row['type'] = linkedEntity.dest__type
-                row['id'] = linkedEntity.dest__id
+#         else:
+        if True:
+            row['type'] = destinationEntityType
+            row['id'] = linkedEntity[0]
+            # if isinstance(linkedEntity.dest__type, str):
+            #     row['type'] = linkedEntity.dest__type.encode('ascii', 'ignore')
+            # else:
+            #     row['type'] = linkedEntity.dest__type
+            # row['id'] = linkedEntity.dest__id
 
-            res.append(row)
+        res.append(row)
 
     return res
 
