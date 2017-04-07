@@ -148,6 +148,7 @@ fixedEntityTypeTypes = {
     'published_file_type': 'PublishedFileType',
     'step': 'Step',
     'local_storage': 'LocalStorage',
+    'project': 'Project',
 }
 
 
@@ -248,6 +249,7 @@ class Shotgun(object):
         self._entity_fields = {}
         self._entities = {}
         self._entity_searches = []
+        self._display_columns = {}
 
         self.update_user_info()
 
@@ -388,7 +390,10 @@ class Shotgun(object):
                                     continue
 
                         if not linkedTable:  # not one of the 2 cases above: standard connection table
-                            linkedTable = inflection.underscore(entityType) + '_' + field + '_connections'
+                            if field == 'versions' and entityType == 'Playlist':
+                                linkedTable = inflection.underscore(entityType) + '_' + 'version' + '_connections'
+                            else:
+                                linkedTable = inflection.underscore(entityType) + '_' + field + '_connections'
                             linkedEntityTypes = fieldDict['properties']['valid_types']['value']
                             if len(linkedEntityTypes) != 1:
                                 print '%s (%s - %s) is linked to none or too many entity types on field %s: %s' % (tableName, entityTypeType, entityType, field, linkedEntityTypes)
@@ -739,7 +744,7 @@ class Shotgun(object):
 
             # TODO should be joined here
             if fieldtype in ['entity', 'url', 'image']:  # url is internally an Attachment, and image is a Thumbnail
-                if fieldtype is 'entity' and field not in fixedEntityTypeTypes:
+                if fieldtype == 'entity' and field not in fixedEntityTypeTypes:
                     queryFields.append(field + "_type")
                 queryFields.append(field + "_id")
 
@@ -810,7 +815,7 @@ class Shotgun(object):
                         filtersToAdd.append(operatorTranslation[relation] % (field + '_id'))
                         queryData += [values['id']]
 
-                    if 'type' in values:
+                    if 'type' in values and field not in fixedEntityTypeTypes:
                         filtersToAdd.append(operatorTranslation[relation] % (field + '_type'))
                         queryData += [values['type']]
 
@@ -852,8 +857,8 @@ class Shotgun(object):
             query += " limit 1"
             # query = query.limit(1)
 
-        print "query: %s" % query
-        print "query data: %s" % queryData
+        # print "query: %s" % query
+        # print "query data: %s" % queryData
 
         res = []
         # TODO sometimes shotgun returns the display name (dunno why, dunno when) on nested structs
@@ -952,7 +957,7 @@ class Shotgun(object):
 
                     if subquery:
                         if not self.carbineLazyMode:
-                            attr =            carbineMultiEntityGetter( self, subquery, subqueryData, destinationEntityType)
+                            attr = carbineMultiEntityGetter( self, subquery, subqueryData, destinationEntityType)
                         else:
                             attr = LazyObject(carbineMultiEntityGetter, self, subquery, subqueryData, destinationEntityType)
                     else:
@@ -963,8 +968,19 @@ class Shotgun(object):
                     # atm we just retrieve it from Shotgun as we're not allowed to sign it
                     # TODO we could at least batch this =(  cause atm is really really slow
                     attr = None  # disable images as its too slow....
-                    # sgEntity = self.find_entity(entityType, id=getField('id'), fields=['image'], carbine=False)
-                    # attr = None if not sgEntity else sgEntity.image
+                    if entityType == 'PublishedFile':
+                        if os.getenv('SHOTGUN_THUMBNAIL_ROOT'):
+                            basePath = os.getenv('SHOTGUN_THUMBNAIL_ROOT')
+                            thumbnailPath = os.path.join(basePath, 'Version/%s'%getField('version_id'))
+                            # print thumbnailPath
+
+                            if os.path.exists(thumbnailPath):
+                                attr = thumbnailPath
+
+                        if not attr:
+                            sgEntity = self.find_entity(entityType, id=getField('id'), fields=['image'], carbine=False)
+                            attr = None if not sgEntity else sgEntity.image
+                    # print 'image: ', attr
 
                 else:  # primitive
                     attr = getField(field)
@@ -1183,10 +1199,10 @@ class Shotgun(object):
     def __getattr__(self, attrName):
 
         def find_entity_wrapper(*args, **kwargs):
-            return self.find_entity(attrName, find_one = True, *args, **kwargs)
+            return self.find_entity(attrName, find_one=True, *args, **kwargs)
 
         def find_multi_entity_wrapper(*args, **kwargs):
-            return self.find_entity(attrName, find_one = False, *args, **kwargs)
+            return self.find_entity(attrName, find_one=False, *args, **kwargs)
 
         if self.is_entity(attrName):
             return find_entity_wrapper
@@ -1434,8 +1450,9 @@ class Entity(object):
         # go wrong.
         if self._entity_type == 'Attachment':
             attrNames = self._fields.keys()
-            attrNames.extend(self._fields['this_file'].keys())
-            attrNames.remove('this_file')
+            if self._fields.get('this_file'):
+                attrNames.extend(self._fields['this_file'].keys())
+                attrNames.remove('this_file')
             return attrNames
 
         return self._fields.keys()
