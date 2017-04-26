@@ -8,6 +8,7 @@ import shotgun_api3
 import psycopg2
 import inflection  # pluralize + convert to CamelCase to snake_case
 
+current_database_host = 'machete' if os.getenv('MIKSITE', 'mikros.int') == 'mikros.int' else 'jets'
 conn = psycopg2.connect(database='int_mikros_shotgun_anim', user='carbine', password='peppergun', host='machete')
 cursor = conn.cursor()
 
@@ -396,7 +397,7 @@ class Shotgun(object):
                                 linkedTable = inflection.underscore(entityType) + '_' + field + '_connections'
                             linkedEntityTypes = fieldDict['properties']['valid_types']['value']
                             if len(linkedEntityTypes) != 1:
-                                print '%s (%s - %s) is linked to none or too many entity types on field %s: %s' % (tableName, entityTypeType, entityType, field, linkedEntityTypes)
+                                # print '%s (%s - %s) is linked to none or too many entity types on field %s: %s' % (tableName, entityTypeType, entityType, field, linkedEntityTypes)
                                 continue
                             linkedEntityType = linkedEntityTypes[0]
 
@@ -420,12 +421,12 @@ class Shotgun(object):
                         neededColumns = [field]
 
                     if not all(c in availableFields for c in neededColumns):
-                        if entityTypeType not in ['summary', 'pivot_column']:
-                            print '%s (%s - %s) does not have the needed columns %s, for field %s' % (tableName, entityTypeType, entityType, neededColumns, field)
+                        # if entityTypeType not in ['summary', 'pivot_column']:
+                        #     print '%s (%s - %s) does not have the needed columns %s, for field %s' % (tableName, entityTypeType, entityType, neededColumns, field)
                         continue
 
                     if linkedTable and linkedTable not in tableList:
-                        print '%s (%s - %s) does not have the needed table %s, for field %s' % (tableName, entityTypeType, entityType, linkedTable, field)
+                        # print '%s (%s - %s) does not have the needed table %s, for field %s' % (tableName, entityTypeType, entityType, linkedTable, field)
                         continue
 
                     d[field] = {
