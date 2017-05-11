@@ -3,6 +3,7 @@ import operator
 import os
 import sys
 import time
+import yaml
 
 import shotgun_api3
 import psycopg2
@@ -150,6 +151,7 @@ fixedEntityTypeTypes = {
     'step': 'Step',
     'local_storage': 'LocalStorage',
     'project': 'Project',
+    'permission_rule_set': 'PermissionRuleSet'
 }
 
 
@@ -317,7 +319,8 @@ class Shotgun(object):
         fields = self.get_entity_fields(entityType)
         return fields.keys()
 
-    def get_entity_fields(self, entityType):
+    def get_entity_fields(self, entityType, sg_fields=None):
+
         if entityType not in self._entity_fields:
 
             # TODO
@@ -350,15 +353,20 @@ class Shotgun(object):
                 # truncate schema_field_read result - only keep what we use
                 d = {}
                 for field, fieldDict in self._sg.schema_field_read(entityType).items():
+                    if sg_fields and field not in sg_fields:
+                        continue
                     additionalInfos = {}
 
                     entityTypeType = fieldDict['data_type']['value']
                     linkedTable = None
                     neededColumns = []
                     if entityTypeType in ['entity', 'url', 'image']:
-                        neededColumns.append(field + '_id')
-                        if entityTypeType == 'entity' and field not in fixedEntityTypeTypes:
-                            neededColumns.append(field + '_type')
+                        if field == 'permission_rule_set':
+                            neededColumns.append('role_id')
+                        else:
+                            neededColumns.append(field + '_id')
+                            if entityTypeType == 'entity' and field not in fixedEntityTypeTypes:
+                                neededColumns.append(field + '_type')
 
                     elif entityTypeType == 'multi_entity':
                         if ':data_type_properties' in displayColumns[field]:
@@ -745,9 +753,12 @@ class Shotgun(object):
 
             # TODO should be joined here
             if fieldtype in ['entity', 'url', 'image']:  # url is internally an Attachment, and image is a Thumbnail
-                if fieldtype == 'entity' and field not in fixedEntityTypeTypes:
-                    queryFields.append(field + "_type")
-                queryFields.append(field + "_id")
+                if field == 'permission_rule_set':
+                    queryFields.append('role_id')
+                else:
+                    if fieldtype == 'entity' and field not in fixedEntityTypeTypes:
+                        queryFields.append(field + "_type")
+                    queryFields.append(field + "_id")
 
             elif fieldtype == 'multi_entity':
                 # join
@@ -884,7 +895,10 @@ class Shotgun(object):
                 fieldtype = entityTypeFields[field]['data_type']
 
                 if fieldtype in ['entity', 'url']:
-                    entity_id = getField(field + '_id')
+                    if field == 'permission_rule_set':
+                        entity_id = getField('role_id')
+                    else:
+                        entity_id = getField(field + '_id')
                     if entity_id:
                         if field in fixedEntityTypeTypes:
                             entity_type = fixedEntityTypeTypes[field]
