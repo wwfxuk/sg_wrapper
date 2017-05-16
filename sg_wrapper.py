@@ -253,6 +253,7 @@ class Shotgun(object):
         self._entities = {}
         self._entity_searches = []
         self._display_columns = {}
+        self._display_columns_rows = {}
 
         self.update_user_info()
 
@@ -324,18 +325,18 @@ class Shotgun(object):
         if entityType not in self._entity_fields:
 
             # TODO
-            cursor.execute("select name, properties from display_columns where entity_type = %s", (entityType,))
-            displayColumnRows = cursor.fetchall()
-            displayColumns = {}
-            import yaml
-            for r in displayColumnRows:
-                data = r[1] or ''
-                # TODO is the first line always garbage?
-                # first line is "--- messy stuff", and seem not to be yaml, so we drop it
-                data = '\n'.join(data.split('\n')[1:])
-                # there is some "!ruby/hash:HashWithIndifferentAccess" about everywhere, and yaml does not like the exclamation point very much
-                data = data.replace("!ruby/hash:HashWithIndifferentAccess", '')
-                displayColumns[r[0]] = yaml.load(data)
+            if entityType not in self._display_columns_rows.keys():
+                cursor.execute("select name, properties from display_columns where entity_type = %s", (entityType,))
+                self._display_columns_rows[entityType] = cursor.fetchall()
+                self._display_columns[entityType] = {}
+                for r in self._display_columns_rows[entityType]:
+                    data = r[1] or ''
+                    # TODO is the first line always garbage?
+                    # first line is "--- messy stuff", and seem not to be yaml, so we drop it
+                    data = '\n'.join(data.split('\n')[1:])
+                    # there is some "!ruby/hash:HashWithIndifferentAccess" about everywhere, and yaml does not like the exclamation point very much
+                    data = data.replace("!ruby/hash:HashWithIndifferentAccess", '')
+                    self._display_columns[entityType][r[0]] = yaml.load(data)
 
             cursor.execute("select table_name from information_schema.tables where table_schema = 'public'")
             tableList = cursor.fetchall()
@@ -369,9 +370,9 @@ class Shotgun(object):
                                 neededColumns.append(field + '_type')
 
                     elif entityTypeType == 'multi_entity':
-                        if ':data_type_properties' in displayColumns[field]:
-                            if ':reverse_of' in displayColumns[field][':data_type_properties']:
-                                ro = displayColumns[field][':data_type_properties'][':reverse_of']
+                        if ':data_type_properties' in self._display_columns[entityType][field]:
+                            if ':reverse_of' in self._display_columns[entityType][field][':data_type_properties']:
+                                ro = self._display_columns[entityType][field][':data_type_properties'][':reverse_of']
                                 if ro and ro.get(':entity_type_name') and ro.get(':name'):
                                     linkedTable = inflection.pluralize(inflection.underscore(ro[':entity_type_name']))
                                     additionalInfos['reverse'] = {
@@ -384,8 +385,8 @@ class Shotgun(object):
                                     continue
 
                             # TODO we assume a field cant both be reverse_of + flip_side but we could be wrong
-                            elif ':flip_side_of' in displayColumns[field][':data_type_properties']:
-                                fso = displayColumns[field][':data_type_properties'][':flip_side_of']
+                            elif ':flip_side_of' in self._display_columns[entityType][field][':data_type_properties']:
+                                fso = self._display_columns[entityType][field][':data_type_properties'][':flip_side_of']
                                 if fso and fso.get(':entity_type') and fso.get(':field_name'):
                                     linkedTable = inflection.pluralize(inflection.underscore(fso[':entity_type']))
                                     additionalInfos['flipSide'] = {
