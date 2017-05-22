@@ -754,12 +754,13 @@ class Shotgun(object):
 
             for entityId, entity in _entitiesDict.iteritems():
                 for field in entity.fields():
-                    if field in ['type', 'id']:
+                    if field in {'type', 'id'}:
                         continue
 
                     # More robust than entity['type']
                     if getattr(entity, 'type', None) == 'Attachment' and \
-                            (field.startswith('local_path') or field in ['name', 'url', 'content_type', 'link_type']):
+                            (field.startswith('local_path') or
+                             field in {'name', 'url', 'content_type', 'link_type'}):
                         continue
 
                     value = entity._fields[field]
