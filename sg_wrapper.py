@@ -753,11 +753,6 @@ class Shotgun(object):
             _entitiesDict = entitiesDict.copy()
 
             for entityId, entity in _entitiesDict.iteritems():
-                # Catch for invalid IDs (shotgun ticket 6100)
-                if entityId < 0:
-                    raise ValueError('{} entity "{}" has an invalid id: {}'
-                                     ''.format(entity.entity_type(), entity.field('code'), entityId))
-
                 for field in entity.fields():
                     if field in ['type', 'id']:
                         continue
