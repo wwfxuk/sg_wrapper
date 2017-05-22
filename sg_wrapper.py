@@ -753,18 +753,6 @@ class Shotgun(object):
             _entitiesDict = entitiesDict.copy()
 
             for entityId, entity in _entitiesDict.iteritems():
-                # Avoid processing debug message formatting if not debugging
-                if _log.getLevel() == 'dbg':
-                    _log.debug("{} : {} {}".format("entityId", entityId, type(entityId)))
-                    _log.debug("{} : {} {}".format("entity", entity, type(entity)))
-                    _log.debug("    entity_type : {} {}".format(entity.entity_type(),
-                                                                type(entity.entity_type())))
-                    _log.debug("    fields : {} {}".format(entity.fields(),
-                                                           type(entity.fields())))
-                    for field in sorted(entity.fields()):
-                        value = entity.field(field)
-                        _log.debug("    (field) {:>10} : {} {}"
-                                   "".format(field, value, type(value)))
                 # Catch for invalid IDs (shotgun ticket 6100)
                 if entityId < 0:
                     raise ValueError('{} entity "{}" has an invalid id: {}'
