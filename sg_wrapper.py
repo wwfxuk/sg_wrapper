@@ -213,7 +213,7 @@ class Shotgun(object):
 
     def __init__(self, sgServer='', sgScriptName='', sgScriptKey='', sg=None,
                  disableApiAuthOverride=False, printInfo=True,
-                 carbine='optional', carbineLazyMode=True,  # TODO carbine=None, lazy=False
+                 carbine='optional', carbineLazyMode=False,  # TODO carbine=None, lazy=False
                  maxConnectionAttempts=5, retrySleep=3,
                  **kwargs):
 
