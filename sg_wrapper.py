@@ -3,7 +3,8 @@ import operator
 import os
 import sys
 import time
-import yaml
+from yaml import load
+from yaml import CLoader as Loader
 
 import shotgun_api3
 import psycopg2
@@ -336,7 +337,7 @@ class Shotgun(object):
                     data = '\n'.join(data.split('\n')[1:])
                     # there is some "!ruby/hash:HashWithIndifferentAccess" about everywhere, and yaml does not like the exclamation point very much
                     data = data.replace("!ruby/hash:HashWithIndifferentAccess", '')
-                    self._display_columns[entityType][r[0]] = yaml.load(data)
+                    self._display_columns[entityType][r[0]] = load(data, Loader=Loader)
 
             cursor.execute("select table_name from information_schema.tables where table_schema = 'public'")
             tableList = cursor.fetchall()
