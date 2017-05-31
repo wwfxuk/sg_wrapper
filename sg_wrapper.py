@@ -878,6 +878,16 @@ class Shotgun(object):
         # TODO sometimes shotgun returns the display name (dunno why, dunno when) on nested structs
         # in addition to the type & the id
         # query = query.dicts()
+        try:
+            conn.isolation_level
+        except Exception as e:
+            print e.message
+            global conn
+            conn = psycopg2.connect(database='int_mikros_shotgun_anim', user='carbine', password='peppergun',
+                                    host='machete')
+
+        global cursor
+        cursor = conn.cursor()
         dbRes = cursor.execute(query, queryData)
         for row in cursor.fetchall():
             formattedRow = {
