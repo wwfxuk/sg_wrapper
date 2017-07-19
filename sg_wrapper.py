@@ -439,11 +439,148 @@ class Shotgun(object):
 
         return result
 
-    def sg_find_one(self, entityType, filters, fields, order=None):
-        return self._sg.find_one(entityType, filters, fields, order)
+    def sg_find_one(self, entityType, filters, fields=None, order=None,
+                    filter_operator=None, retired_only=False,
+                    include_archived_projects=True,
+                    additional_filter_presets=None):
+        '''Shortcut for :func:`~shotgun_api3.Shotgun.find` with ``limit=1`` so 
+        it returns a single result.
 
-    def sg_find(self, entityType, filters, fields, order=None):
-        return self._sg.find(entityType, filters, fields, order)
+            >>> sg.find_one("Asset", [["id", "is", 32]], ["id", "code", "sg_status_list"])
+            {'code': 'Gopher', 'id': 32, 'sg_status_list': 'ip', 'type': 'Asset'}
+
+        :param str entity_type: Shotgun entity type as a string to find.
+        :param list filters: list of filters to apply to the query.
+
+            .. seealso:: :ref:`filter_syntax`
+
+        :param list fields: Optional list of fields to include in each entity record returned.
+            Defaults to ``["id"]``.
+        :param int order: Optional list of fields to order the results by. List has the format::
+
+            [{'field_name':'foo', 'direction':'asc'}, {'field_name':'bar', 'direction':'desc'}]
+
+            Defaults to sorting by ``id`` in ascending order.
+        :param str filter_operator: Operator to apply to the filters. Supported values are ``"all"``
+            and ``"any"``. These are just another way of defining if the query is an AND or OR
+            query. Defaults to ``"all"``.
+        :param bool retired_only: Optional boolean when ``True`` will return only entities that have
+            been retried. Defaults to ``False`` which returns only entities which have not been
+            retired. There is no option to return both retired and non-retired entities in the
+            same query.
+        :param bool include_archived_projects: Optional boolean flag to include entities whose projects
+            have been archived. Defaults to ``True``.
+        :param additional_filter_presets: Optional list of presets to further filter the result
+            set, list has the form::
+
+                [{"preset_name": <preset_name>, <optional_param1>: <optional_value1>, ... }]
+
+            Note that these filters are ANDed together and ANDed with the 'filter'
+            argument.
+
+            For details on supported presets and the format of this parameter see
+            :ref:`additional_filter_presets`
+        :returns: Dictionary representing a single matching entity with the requested fields,
+            and the defaults ``"id"`` and ``"type"`` which are always included.
+        :rtype: dict
+        '''
+        return self._sg.find_one(entityType, filters, fields=fields, order=order,
+                                 filter_operator=filter_operator, retired_only=retired_only,
+                                 include_archived_projects=include_archived_projects,
+                                 additional_filter_presets=additional_filter_presets)
+
+    def sg_find(self, entityType, filters, fields=None, order=None,
+                filter_operator=None, limit=0, retired_only=False, page=0,
+                include_archived_projects=True, additional_filter_presets=None):
+        '''Find entities matching the given filters.
+
+            >>> # Find Character Assets in Sequence 100_FOO
+            >>> # -------------
+            >>> fields = ['id', 'code', 'sg_asset_type']
+            >>> sequence_id = 2 # Sequence "100_FOO"
+            >>> project_id = 4 # Demo Project
+            >>> filters = [
+            ...     ['project', 'is', {'type': 'Project', 'id': project_id}],
+            ...     ['sg_asset_type', 'is', 'Character'],
+            ...     ['sequences', 'is', {'type': 'Sequence', 'id': sequence_id}]
+            ... ]
+            >>> assets= sg.find("Asset",filters,fields)
+            [{'code': 'Gopher', 'id': 32, 'sg_asset_type': 'Character', 'type': 'Asset'},
+             {'code': 'Cow', 'id': 33, 'sg_asset_type': 'Character', 'type': 'Asset'},
+             {'code': 'Bird_1', 'id': 35, 'sg_asset_type': 'Character', 'type': 'Asset'},
+             {'code': 'Bird_2', 'id': 36, 'sg_asset_type': 'Character', 'type': 'Asset'},
+             {'code': 'Bird_3', 'id': 37, 'sg_asset_type': 'Character', 'type': 'Asset'},
+             {'code': 'Raccoon', 'id': 45, 'sg_asset_type': 'Character', 'type': 'Asset'},
+             {'code': 'Wet Gopher', 'id': 149, 'sg_asset_type': 'Character', 'type': 'Asset'}]
+
+        You can drill through single entity links to filter on fields or display
+        linked fields. This is often called "deep linking" or using "dot syntax".
+
+            .. seealso:: :ref:`filter_syntax`
+
+            >>> # Find Versions created by Tasks in the Animation Pipeline Step
+            >>> # -------------
+            >>> fields = ['id', 'code']
+            >>> pipeline_step_id = 2 # Animation Step ID
+            >>> project_id = 4 # Demo Project
+            >>> # you can drill through single-entity link fields
+            >>> filters = [
+            ...     ['project','is', {'type': 'Project','id': project_id}],
+            ...     ['sg_task.Task.step.Step.id', 'is', pipeline_step_id]
+            >>> ]
+            >>> sg.find("Version", filters, fields)
+            [{'code': 'scene_010_anim_v001', 'id': 42, 'type': 'Version'},
+             {'code': 'scene_010_anim_v002', 'id': 134, 'type': 'Version'},
+             {'code': 'bird_v001', 'id': 137, 'type': 'Version'},
+             {'code': 'birdAltBlue_v002', 'id': 236, 'type': 'Version'}]
+
+        :param str entity_type: Shotgun entity type to find.
+        :param list filters: list of filters to apply to the query.
+
+            .. seealso:: :ref:`filter_syntax`
+
+        :param list fields: Optional list of fields to include in each entity record returned.
+            Defaults to ``["id"]``.
+        :param list order: Optional list of dictionaries defining how to order the results of the
+            query. Each dictionary contains the ``field_name`` to order by and  the ``direction``
+            to sort::
+
+                [{'field_name':'foo', 'direction':'asc'}, {'field_name':'bar', 'direction':'desc'}]
+
+            Defaults to sorting by ``id`` in ascending order.
+        :param str filter_operator: Operator to apply to the filters. Supported values are ``"all"``
+            and ``"any"``. These are just another way of defining if the query is an AND or OR
+            query. Defaults to ``"all"``.
+        :param int limit: Optional limit to the number of entities to return. Defaults to ``0`` which
+            returns all entities that match.
+        :param int page: Optional page of results to return. Use this together with the ``limit``
+            parameter to control how your query results are paged. Defaults to ``0`` which returns
+            the first page of results.
+        :param bool retired_only: Optional boolean when ``True`` will return only entities that have
+            been retried. Defaults to ``False`` which returns only entities which have not been
+            retired. There is no option to return both retired and non-retired entities in the
+            same query.
+        :param bool include_archived_projects: Optional boolean flag to include entities whose projects
+            have been archived. Defaults to ``True``.
+        :param additional_filter_presets: Optional list of presets to further filter the result
+            set, list has the form::
+
+                [{"preset_name": <preset_name>, <optional_param1>: <optional_value1>, ... }]
+
+            Note that these filters are ANDed together and ANDed with the 'filter'
+            argument.
+
+            For details on supported presets and the format of this parameter see
+            :ref:`additional_filter_presets`
+        :returns: list of dictionaries representing each entity with the requested fields, and the
+            defaults ``"id"`` and ``"type"`` which are always included.
+        :rtype: list
+        '''
+        return self._sg.find(entityType, filters, fields=fields, order=order,
+                             filter_operator=filter_operator, limit=limit,
+                             retired_only=retired_only, page=page,
+                             include_archived_projects=include_archived_projects,
+                             additional_filter_presets=additional_filter_presets)
 
     def update(self, entity, updateFields):
         ''' Update entity fields
