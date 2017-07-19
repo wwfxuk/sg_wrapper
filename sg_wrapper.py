@@ -451,9 +451,6 @@ class Shotgun(object):
 
         :param str entity_type: Shotgun entity type as a string to find.
         :param list filters: list of filters to apply to the query.
-
-            .. seealso:: :ref:`filter_syntax`
-
         :param list fields: Optional list of fields to include in each entity record returned.
             Defaults to ``["id"]``.
         :param int order: Optional list of fields to order the results by. List has the format::
@@ -516,8 +513,6 @@ class Shotgun(object):
         You can drill through single entity links to filter on fields or display
         linked fields. This is often called "deep linking" or using "dot syntax".
 
-            .. seealso:: :ref:`filter_syntax`
-
             >>> # Find Versions created by Tasks in the Animation Pipeline Step
             >>> # -------------
             >>> fields = ['id', 'code']
@@ -536,9 +531,6 @@ class Shotgun(object):
 
         :param str entity_type: Shotgun entity type to find.
         :param list filters: list of filters to apply to the query.
-
-            .. seealso:: :ref:`filter_syntax`
-
         :param list fields: Optional list of fields to include in each entity record returned.
             Defaults to ``["id"]``.
         :param list order: Optional list of dictionaries defining how to order the results of the
