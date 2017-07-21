@@ -59,16 +59,14 @@ dataTypeList = frozenset([
     ])
 
 # anim only: exclude 'Cut' table to avoid conflicts with the CustomEntity23
+ignoredTables = set()
 if os.getenv('PROD_TYPE', 'anim') == 'anim':
-    ignoredTables = [
-        'Cut',
-    ]
-else:
-    ignoredTables = []
+    ignoredTables.add('Cut')
 
 
 class ShotgunWrapperError(Exception):
     pass
+
 
 class retryWrapper(shotgun_api3.Shotgun):
     ''' Wraps a shotgun_api3 object and retries any connection attempt when a 503 error si catched
@@ -167,15 +165,32 @@ class Shotgun(object):
         return name + "s"
 
     def get_entity_list(self):
-        entitySchema = self._sg.schema_entity_read()
+        """Get a list of entity type information
+
+        Returns a list of dictionaries with the following keys:
+
+        * **fields** Empty list to be filled later
+        * **type** (``str``) Actual name of the entity from
+          ``schema_entity_read()``
+        * **name** (``str``) *Nicer* name of the entity (without spaces)
+        * **type_plural** (``str``) Pluralised version of **type** above
+        * **name_plural** (``str``) Pluralised version of **name** above
+
+        :return: List of dictionaries for all entity type's info
+        :rtype: list[dict[str]]
+        """
+        entitySchemaDict = self._sg.schema_entity_read()
         entities = []
-        for e in entitySchema:
-            if e in ignoredTables:
+        for entityTypeName, entityTypeInfo in entitySchemaDict.iteritems():
+            if entityTypeName in ignoredTables:
                 continue
-            newEntity = {'type': e, 'name': entitySchema[e]['name']['value'].replace(" ", ""), 'fields': []}
-            newEntity['type_plural'] = self.pluralise(newEntity['type'])
-            newEntity['name_plural'] = self.pluralise(newEntity['name'])
-            entities.append(newEntity)
+
+            entityName = entityTypeInfo['name']['value'].replace(" ", "")
+            entities.append({'type': entityTypeName,
+                             'name': entityName,
+                             'type_plural': self.pluralise(entityTypeName),
+                             'name_plural': self.pluralise(entityName),
+                             'fields': []})
 
         return entities
 
