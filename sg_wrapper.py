@@ -302,6 +302,24 @@ class Shotgun(object):
 
         raise ValueError('Could not find entity of type %s' % entityType)
 
+    def get_connection_types_names(self, niceNames=False):
+        '''Get a list of all connection entity types' names
+
+        Basically filters current private entity types list which ends in
+        "Connection"
+
+        :keyword niceNames: Optionally get the nice names rather than official
+                            Shotgun entity names
+        :type niceNames: bool
+        :return: List of all connection entity types' names
+        :rtype: list[str]
+        '''
+        if niceNames:
+            return [entityType.name for entityType in self._entity_types
+                    if entityType.name.endswith("Connection")]
+        else:
+            return [entityType.type for entityType in self._entity_types
+                    if entityType.type.endswith("Connection")]
 
     def get_entity_field_list(self, entityType):
         fields = self.get_entity_fields(entityType)
