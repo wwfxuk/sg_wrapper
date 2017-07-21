@@ -68,6 +68,32 @@ class ShotgunWrapperError(Exception):
     pass
 
 
+class PrimaryKeysError(ShotgunWrapperError):
+    '''More explicit exception type for if a global primary key is not defined
+    '''
+    def __init__(self, entityType):
+        '''Construct the exception
+
+        :param entityType: Name of the entity type that does not have one of
+                           the defined primary keys
+        :type entityType: str
+        '''
+        self.entityType = entityType
+        ''':var entityType: Name of the entity type that does not have one of
+                           the defined primary keys
+           :type entityType: str
+        '''
+
+    def __str__(self):
+        '''Custom formatting of error message using ``entityType`` attribute
+
+        :return: Formatted error message
+        :rtype: str
+        '''
+        return str('Entity type "%s" does not have one of the defined primary '
+                   'keys: %s.' % (self.entityType, ", ".join(primaryTextKeys)))
+
+
 class retryWrapper(shotgun_api3.Shotgun):
     ''' Wraps a shotgun_api3 object and retries any connection attempt when a 503 error si catched
         Subclasses shotgun_api3.Shotgun forces us to use getattribute instead of getattr but
@@ -422,7 +448,7 @@ class Shotgun(object):
                         filters[fieldName] = key
                         break
                 else:  # No Break (for fieldName in primaryTextKeys:... else:)
-                    raise ShotgunWrapperError("Entity type '%s' does not have one of the defined primary keys(%s)." % (entityType, ", ".join(primaryTextKeys)))
+                    raise PrimaryKeysError(entityType)
 
         for arg in kwargs:
             filters[arg] = self.get_entity_description(kwargs[arg])
