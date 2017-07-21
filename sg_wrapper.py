@@ -39,7 +39,7 @@ baseOperator = frozenset([
     'name_not_contains',
     'name_starts_with',
     'name_ends_with',
-    ])
+])
 
 operatorMap = {
     '!': 'is_not',
@@ -49,14 +49,14 @@ operatorMap = {
     'endswith': 'ends_with',
     '<': 'less_than',
     '>': 'greater_than',
-    }
+}
 
 # Shotgun field types where a list is expected
 dataTypeList = frozenset([
     'multi_entity',
     'tag_list',
     'addressing'
-    ])
+])
 
 # anim only: exclude 'Cut' table to avoid conflicts with the CustomEntity23
 ignoredTables = set()
@@ -118,9 +118,12 @@ class retryWrapper(shotgun_api3.Shotgun):
         return retryHook
 
 
-# This is the base Shotgun class. Everything is created from here, and it deals with talking to the
-# standard Shotgun API.
 class Shotgun(object):
+    '''This is the base Shotgun class.
+
+    Everything is created from here, and it deals with talking to the standard
+    Shotgun API.
+    '''
     class EntityType(object):
         '''Utility class for an entity's type'''
         def __init__(self, typeName, name, typeNamePlural, namePlural):
@@ -362,7 +365,7 @@ class Shotgun(object):
 
 
     def find_entity(self, entityType, key = None, find_one = True, fields = None,
-            order=None, exclude_fields = None, optional_filters=None, **kwargs):
+                    order=None, exclude_fields = None, optional_filters=None, **kwargs):
         ''' Find Shotgun entity
 
         :param optional_filters: filters only applied when the result is not available from the cache
@@ -410,16 +413,15 @@ class Shotgun(object):
                 thisEntityFields = ourEntityType.fields
 
         if key:
-            if type(key) == int:
+            keyType = type(key)
+            if keyType == int:
                 filters['id'] = key
-            elif type(key) == str:
-                foundPrimaryKey = False
+            elif keyType == str:
                 for fieldName in primaryTextKeys:
                     if fieldName in thisEntityFields:
                         filters[fieldName] = key
-                        foundPrimaryKey = True
                         break
-                if not foundPrimaryKey:
+                else:  # No Break (for fieldName in primaryTextKeys:... else:)
                     raise ShotgunWrapperError("Entity type '%s' does not have one of the defined primary keys(%s)." % (entityType, ", ".join(primaryTextKeys)))
 
         for arg in kwargs:
@@ -447,13 +449,12 @@ class Shotgun(object):
                             entity = self._entities[thisEntityType][val]
 
                             if fields and not(set(fields) <= set(entity.fields())):
-                                    # remove entity from cache
-                                    # it will be added again after the new query
-                                    self.unregister_entity(entity)
-                                    missing_value_from_cache.append(val)
+                                # remove entity from cache
+                                # it will be added again after the new query
+                                self.unregister_entity(entity)
+                                missing_value_from_cache.append(val)
 
                             else:  # found in cache
-
                                 if find_one:
                                     return entity
                                 entities_from_cache.append(entity)
@@ -533,10 +534,8 @@ class Shotgun(object):
         else:
             sg_results = self.sg_find(thisEntityType, sgFilters, fields, sgOrder)
 
-            result = []
-            for sg_result in sg_results:
-                result.append(Entity(self, thisEntityType, sg_result))
-
+            result = [Entity(self, thisEntityType, sg_result)
+                      for sg_result in sg_results]
             result.extend(entities_from_cache)
 
         thisSearch = {}
@@ -584,9 +583,7 @@ class Shotgun(object):
 
             entityFields = self.get_entity_fields(entity.entity_type())
 
-            data = {}
-            for f in updateFields:
-                data[f] = entity.field(f)
+            data = {f: entity.field(f) for f in updateFields}
 
             updateData = self._translate_data(entityFields, data)
 
@@ -751,7 +748,7 @@ class Shotgun(object):
         ''' Translate sw_wrapper data to shotgun data '''
         translatedData = {}
 
-        for arg in data:
+        for arg, entity in data.iteritems():
 
             if arg not in entityFields:
                 continue
@@ -759,21 +756,21 @@ class Shotgun(object):
             # assume a list here
             if entityFields[arg]['data_type']['value'] in dataTypeList:
                 translatedData[arg] = []
-                for e in data[arg]:
+                for e in entity:
                     if isinstance(e, Entity):
                         translatedData[arg].append({
-                        'type': e['type'],
-                        'id': e['id']})
+                            'type': e['type'],
+                            'id': e['id']})
                     else:
                         translatedData[arg].append(e)
 
             else:
 
-                if isinstance(data[arg], Entity):
-                    translatedData[arg] = {'type': data[arg].entity_type(),
-                            'id': data[arg].entity_id()}
+                if isinstance(entity, Entity):
+                    translatedData[arg] = {'type': entity.entity_type(),
+                                           'id': entity.entity_id()}
                 else:
-                    translatedData[arg] = data[arg]
+                    translatedData[arg] = entity
 
         return translatedData
 
@@ -996,11 +993,7 @@ class Entity(object):
                                                                         fields=fields)
                     return attribute['entity']
                 elif type(attribute) == list:
-                    iterator = self.list_iterator(currentFields[fieldName], fields)
-                    attrResult = []
-                    for item in iterator:
-                        attrResult.append(item)
-                    return attrResult
+                    return list(self.list_iterator(currentFields[fieldName], fields))
                 else:
                     return currentFields[fieldName]
 
