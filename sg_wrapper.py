@@ -3,6 +3,8 @@ import os
 import sys
 import time
 import warnings
+from collections import defaultdict
+
 import shotgun_api3
 
 from sg_wrapper_util import string_to_uuid, get_calling_script
@@ -976,10 +978,30 @@ class Shotgun(object):
 
 
 class Entity(object):
+    '''Shotgun entity object that everyone uses
+    '''
     def __init__(self, shotgun, entity_type, fields):
+        '''Construct an Entity object of a specific type
+
+        :param shotgun: Shotgun object instance
+        :type shotgun: Shotgun
+        :param entity_type: Name of the entity's type
+        :type entity_type: str
+        :param fields: Fields values for this entity (Shotgun style dict)
+        :type fields: dict[str]
+        '''
         self._entity_type = entity_type
+        ''':var _entity_type: Name of the entity's type
+           :type _entity_type: str'''
+
         self._shotgun = shotgun
+        ''':var _shotgun: Shotgun object instance
+           :type _shotgun: Shotgun'''
+
         self._fields = fields
+        ''':var _fields: Fields values for this entity (Shotgun style dict)
+           :type _fields: dict[str]'''
+
         self._fields_changed = {}
         self._sg_filters = []
 
@@ -1037,19 +1059,17 @@ class Entity(object):
         return self._entity_id
 
     def field(self, fieldName, fields=None):
-
         ''' Get entity field
+
+        .. note:: HIGHLY RECOMMENDED for speed purpose, specifying a small list
+                  of fields could help (if entity is not already in cache)
 
         :param fieldName: field name to get
         :type fieldName: str
-        :param fields: list of fields to get (optional, default to all)
-        :type fields: list
-
-        .. note::
-            for speed purpose, specifying a small list of fields
-            could help (if entity is not already in cache)
+        :keyword fields: list of fields to get (optional, default to all)
+        :type fields: list[str]
+        :return: Value of the field for our entity
         '''
-
         # Workaround to fix the attachment access to path fields problem.
         # Attachements are handle differently by SG as some fields
         # are dynamic and not described in the schema making sg_wrapper
@@ -1067,25 +1087,56 @@ class Entity(object):
                                                                         id=attribute['id'],
                                                                         fields=fields)
                     return attribute['entity']
+
                 elif type(attribute) == list:
-                    return list(self.list_iterator(currentFields[fieldName], fields))
+                    return list(self.list_iterator(attribute, fields))
+
                 else:
-                    return currentFields[fieldName]
+                    return attribute
 
         raise AttributeError("Entity '%s' has no field '%s'" % (self._entity_type, fieldName))
 
-    def list_iterator(self, entities, fields, batch_requests=True):
-        # TODO atm it only fetches the new entity if it has not already been fetched
-        # but it should also check if every required fields are available in the pre-fetched entities
+    def list_iterator(self, entities, fields=None, batch_requests=True):
+        '''Iterate through the list of entities passed in
 
+        .. note:: HIGHLY RECOMMENDED for speed purpose, specifying a small list
+                  of fields could help (if entity is not already in cache)
+
+
+        Generator for the entities themselves, which may be:
+
+        * A string, i.e. ``Asset.tag_list`` (list of str), or
+        * An :class:`Entity`, e.g. ``Asset.tasks`` (list of :class:`Entity`).
+
+          Sometimes, the list of entities can also be a list of Shotgun style
+          dictionaries for entities yet to be converted to :class:`Entity`
+          objects. In that case, one of the following will be yielded:
+
+            * Value mapped to the ``'entity'`` key (if mapped), else
+            * An :class:`Entity` generated from:
+
+               * ``'type'`` and ``'id'`` keys,
+               * For only fields in the ``fields`` kwarg (if any are supplied)
+               * Using :func:`Shotgun.find_entity()`
+
+
+        .. todo:: (``batch_requests``) atm it only fetches the new entity if it
+                  has not already been fetched but it should also check if every
+                  required fields are available in the pre-fetched entities
+
+        :param entities: list of entities or names of entities to iterate
+        :type entities: list[dict[str]] or list[str] or list[Entity]
+        :keyword fields: list of fields to get (optional, default to all)
+        :type fields: list[str]
+        :return: Generator of :class:`Entity` or `str`
+        :rtype: Generator[Entity] or Generator[str]
+        '''
         if batch_requests:
             # batch the find_entity requests by entity type
             # to avoid making one request per entity to fetch
-            to_fetch = {}
+            to_fetch = defaultdict(list)
             for e in entities:
                 if not isinstance(e, (basestring, Entity)) and 'entity' not in e:
-                    if e['type'] not in to_fetch:
-                        to_fetch[e['type']] = []
                     to_fetch[e['type']].append(e)
 
             for tf_type, tf_entities in to_fetch.iteritems():
@@ -1096,7 +1147,6 @@ class Entity(object):
                     e['entity'] = res_by_id.get(e['id'])
 
         for entity in entities:
-
             # ie for Asset.tag_list (list of str) or for Asset.tasks (list of sg_wrapper.Entity)
             if isinstance(entity, (basestring, Entity)):
                 yield entity
