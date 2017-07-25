@@ -2,7 +2,7 @@ import copy
 import os
 import sys
 import time
-
+import warnings
 import shotgun_api3
 
 from sg_wrapper_util import string_to_uuid, get_calling_script
@@ -235,7 +235,7 @@ class Shotgun(object):
             self._sg = retryWrapper(self._sg, maxConnectionAttempts, retryInitialSleep, retrySleepMultiplier,
                                     printInfo, exceptionType)
 
-        self._entity_types = self.get_entity_list()
+        self._entity_types = self.get_entity_types_list()
         self._entity_fields = {}
         self._entities = {}
         self._entity_searches = []
@@ -256,6 +256,31 @@ class Shotgun(object):
         return name + "s"
 
     def get_entity_list(self):
+        '''Backwards compatible function to get a list of entity type info
+
+        Use the new and better named :func:`Shotgun.get_entity_types_list()`
+        instead if possible.
+
+        Returns a list of dictionaries with the following keys:
+
+        * **fields** Empty list to be filled later
+        * **type** (``str``) Actual name of the entity from
+          ``schema_entity_read()``
+        * **name** (``str``) *Nicer* name of the entity (without spaces)
+        * **type_plural** (``str``) Pluralised version of **type** above
+        * **name_plural** (``str``) Pluralised version of **name** above
+
+        :return: List of dictionaries for all entity type's info
+        :rtype: list[dict[str]]
+        '''
+        return [dict(fields=entityType.fields,
+                     type=entityType.type,
+                     name=entityType.name,
+                     type_plural=entityType.type_plural,
+                     name_plural=entityType.name_plural)
+                for entityType in self.get_entity_types_list()]
+
+    def get_entity_types_list(self):
         '''Get a list of entity type information
 
         Returns a list of :class:`Shotgun.EntityType` with the following
