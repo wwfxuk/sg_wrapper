@@ -384,22 +384,23 @@ class Shotgun(object):
                 return True
         return False
 
-    def get_real_type(self, entityType, defaults_to_paramater=False):
+    def get_real_type(self, entityType, defaults_to_parameter=False,
+                      defaults_to_paramater=False):
         '''Translate given type to the real shotgun type
 
         i.e. ``Cut`` to ``CustomEntity23``
 
         If it cannot find the real type, it will return:
 
-        * ``None``, if ``defaults_to_paramater`` kwarg is ``False``, else
-        * The original ``entityType`` parameter, if ``defaults_to_paramater``
+        * ``None``, if ``defaults_to_parameter`` kwarg is ``False``, else
+        * The original ``entityType`` parameter, if ``defaults_to_parameter``
           kwarg is ``True``
 
         :param entityType: Name of the entity type to get real Shotgun type
         :type entityType: str
-        :keyword defaults_to_paramater: Whether to return parameter if real type
+        :keyword defaults_to_parameter: Whether to return parameter if real type
                                         cannot be determined
-        :type defaults_to_paramater: bool
+        :type defaults_to_parameter: bool
         :return: Real Shotgun type's name
         :rtype: str or None
         '''
@@ -407,7 +408,12 @@ class Shotgun(object):
             if ourEntityType.isCalled(entityType):
                 return ourEntityType.type
 
-        if defaults_to_paramater:
+        if defaults_to_paramater or defaults_to_parameter:
+            # Warn of old, misspelled "defaults_to_paramater"
+            if defaults_to_paramater:
+                warnings.warn('Old kwarg "defaults_to_paramater" is spelt '
+                              'wrongand deprecated, please use '
+                              ' "defaults_to_parameter" instead')
             return entityType
         else:
             return None
