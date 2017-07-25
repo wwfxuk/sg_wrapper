@@ -330,7 +330,7 @@ class Shotgun(object):
         raise ValueError('Could not find entity of type %s' % entityType)
 
     def get_connection_types_names(self, niceNames=False):
-        '''Get a list of all connection entity types' names
+        '''Get a list of MOST of all the connection entity types' names
 
         Basically filters current private entity types list which ends in
         "Connection"
@@ -338,7 +338,7 @@ class Shotgun(object):
         :keyword niceNames: Optionally get the nice names rather than official
                             Shotgun entity names
         :type niceNames: bool
-        :return: List of all connection entity types' names
+        :return: List of MOST of all the connection entity types' names
         :rtype: list[str]
         '''
         if niceNames:
