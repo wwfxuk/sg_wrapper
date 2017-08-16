@@ -65,6 +65,34 @@ ignoredTables = set()
 if os.getenv('PROD_TYPE', 'anim') == 'anim':
     ignoredTables.add('Cut')
 
+def schemaFieldRead(sg, *args, **kwargs):
+    ''' To remove. Added to support shotgun 7.3 updates on tags
+
+    :param sg: [description]
+    :type sg: [type]
+    :param entityType: [description]
+    :type entityType: [type]
+    :returns: [description]
+    :rtype: {[type]}
+    '''
+
+    result = sg.schema_field_read(*args, **kwargs)
+    if 'tags' in result and  'tag_list' not in result:
+        result['tag_list'] = {'data_type': {'editable': False, 'value': 'tag_list'},
+                               'description': {'editable': True, 'value': ''},
+                               'editable': {'editable': False, 'value': True},
+                               'entity_type': {'editable': False, 'value': 'PublishedFile'},
+                               'mandatory': {'editable': False, 'value': False},
+                               'name': {'editable': True, 'value': 'Tags'},
+                               'properties': {'default_value': {'editable': False, 'value': None},
+                                'summary_default': {'editable': True, 'value': 'none'},
+                                'valid_types': {'editable': True, 'value': ['Tag']}},
+                               'ui_value_displayable': {'editable': False, 'value': True},
+                               'unique': {'editable': False, 'value': False},
+                               'visible': {'editable': False, 'value': True}}
+
+    return result
+
 
 class ShotgunWrapperError(Exception):
     pass
@@ -114,7 +142,11 @@ class retryWrapper(shotgun_api3.Shotgun):
         if not hasattr(self_sg, attr):
             return object.__getattribute__(self, attr)
 
-        attribute = self._sg.__getattribute__(attr)
+        if attr == 'schema_field_read':
+            import types
+            return types.MethodType(schemaFieldRead, self_sg)
+
+        attribute = self_sg.__getattribute__(attr)
         if not callable(attribute):
             return attribute
 
@@ -243,7 +275,6 @@ class Shotgun(object):
         self._entity_searches = []
 
         self.update_user_info()
-
         if not disableApiAuthOverride:
             self.update_auth_info(sgScriptName, printInfo=printInfo)
 
@@ -671,8 +702,7 @@ class Shotgun(object):
         '''
         return self._sg.find_one(entityType, filters, fields=fields, order=order,
                                  filter_operator=filter_operator, retired_only=retired_only,
-                                 include_archived_projects=include_archived_projects,
-                                 additional_filter_presets=additional_filter_presets)
+                                 include_archived_projects=include_archived_projects)
 
     def sg_find(self, entityType, filters, fields=None, order=None,
                 filter_operator=None, limit=0, retired_only=False, page=0,
@@ -759,8 +789,7 @@ class Shotgun(object):
         return self._sg.find(entityType, filters, fields=fields, order=order,
                              filter_operator=filter_operator, limit=limit,
                              retired_only=retired_only, page=page,
-                             include_archived_projects=include_archived_projects,
-                             additional_filter_presets=additional_filter_presets)
+                             include_archived_projects=include_archived_projects)
 
     def update(self, entity, updateFields):
         ''' Update entity fields
