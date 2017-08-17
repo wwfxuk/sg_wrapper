@@ -2,8 +2,6 @@ import copy
 import os
 import sys
 import time
-import warnings
-from collections import defaultdict
 
 import shotgun_api3
 
@@ -41,7 +39,7 @@ baseOperator = frozenset([
     'name_not_contains',
     'name_starts_with',
     'name_ends_with',
-])
+    ])
 
 operatorMap = {
     '!': 'is_not',
@@ -51,19 +49,22 @@ operatorMap = {
     'endswith': 'ends_with',
     '<': 'less_than',
     '>': 'greater_than',
-}
+    }
 
 # Shotgun field types where a list is expected
 dataTypeList = frozenset([
     'multi_entity',
     'tag_list',
     'addressing'
-])
+    ])
 
 # anim only: exclude 'Cut' table to avoid conflicts with the CustomEntity23
-ignoredTables = set()
 if os.getenv('PROD_TYPE', 'anim') == 'anim':
-    ignoredTables.add('Cut')
+    ignoredTables = [
+        'Cut',
+    ]
+else:
+    ignoredTables = []
 
 def schemaFieldRead(sg, *args, **kwargs):
     ''' To remove. Added to support shotgun 7.3 updates on tags
@@ -96,33 +97,6 @@ def schemaFieldRead(sg, *args, **kwargs):
 
 class ShotgunWrapperError(Exception):
     pass
-
-
-class PrimaryKeysError(ShotgunWrapperError):
-    '''More explicit exception type for if a global primary key is not defined
-    '''
-    def __init__(self, entityType):
-        '''Construct the exception
-
-        :param entityType: Name of the entity type that does not have one of
-                           the defined primary keys
-        :type entityType: str
-        '''
-        self.entityType = entityType
-        ''':var entityType: Name of the entity type that does not have one of
-                           the defined primary keys
-           :type entityType: str
-        '''
-
-    def __str__(self):
-        '''Custom formatting of error message using ``entityType`` attribute
-
-        :return: Formatted error message
-        :rtype: str
-        '''
-        return str('Entity type "%s" does not have one of the defined primary '
-                   'keys: %s.' % (self.entityType, ", ".join(primaryTextKeys)))
-
 
 class retryWrapper(shotgun_api3.Shotgun):
     ''' Wraps a shotgun_api3 object and retries any connection attempt when a 503 error si catched
@@ -178,74 +152,9 @@ class retryWrapper(shotgun_api3.Shotgun):
         return retryHook
 
 
+# This is the base Shotgun class. Everything is created from here, and it deals with talking to the
+# standard Shotgun API.
 class Shotgun(object):
-    '''This is the base Shotgun class.
-
-    Everything is created from here, and it deals with talking to the standard
-    Shotgun API.
-    '''
-    class EntityType(object):
-        '''Utility class for an entity's type'''
-        def __init__(self, typeName, name, typeNamePlural, namePlural):
-            '''Initialise using given names
-
-            :param typeName: Official name the entity type
-            :type typeName: str
-            :param name: Nice name for the entity type
-            :type name: str
-            :param typeNamePlural: Pluralised official name the entity type
-            :type typeNamePlural: str
-            :param namePlural: Pluralised nice name for the entity type
-            :type namePlural: str
-            '''
-            super(Shotgun.EntityType, self).__init__()
-            self.type = typeName
-            ''':var type: Official name the entity type
-               :type type: str'''
-
-            self.name = name
-            ''':var name: Nice name for the entity type
-               :type name: str'''
-
-            self.type_plural = typeNamePlural
-            ''':var type_plural: Pluralised official name the entity type
-               :type type_plural: str'''
-
-            self.name_plural = namePlural
-            ''':var name_plural: Pluralised nice name for the entity type
-               :type name_plural: str'''
-
-            self.fields = []
-            ''':var fields: List of official names to our entity type's fields
-               :type fields: list[str]'''
-
-        def isCalled(self, name):
-            '''Check if a given name is a singular or plural version of our
-            entity's nice or official name
-
-            :return: Name given matches our type's singular or plural name
-            :rtype: bool
-            '''
-            return self.isCalledSingular(name) or self.isCalledPlural(name)
-
-        def isCalledSingular(self, name):
-            '''Check if a given name matches singular version of our
-            entity's nice or official name
-
-            :return: Name given matches our type's singular name
-            :rtype: bool
-            '''
-            return self.type == name or self.name == name
-
-        def isCalledPlural(self, name):
-            '''Check if a given name matches plural version of our
-            entity's nice or official name
-
-            :return: Name given matches our type's plural name
-            :rtype: bool
-            '''
-            return self.type_plural == name or self.name_plural == name
-
 
     def __init__(self, sgServer='', sgScriptName='', sgScriptKey='', sg=None,
                  disableApiAuthOverride=False, printInfo=True,
@@ -269,7 +178,7 @@ class Shotgun(object):
             self._sg = retryWrapper(self._sg, maxConnectionAttempts, retryInitialSleep, retrySleepMultiplier,
                                     printInfo, exceptionType)
 
-        self._entity_types = self.get_entity_types_list()
+        self._entity_types = self.get_entity_list()
         self._entity_fields = {}
         self._entities = {}
         self._entity_searches = []
@@ -289,95 +198,30 @@ class Shotgun(object):
         return name + "s"
 
     def get_entity_list(self):
-        '''Backwards compatible function to get a list of entity type info
-
-        Use the new and better named :func:`Shotgun.get_entity_types_list()`
-        instead if possible.
-
-        Returns a list of dictionaries with the following keys:
-
-        * **fields** Empty list to be filled later
-        * **type** (``str``) Actual name of the entity from
-          ``schema_entity_read()``
-        * **name** (``str``) *Nicer* name of the entity (without spaces)
-        * **type_plural** (``str``) Pluralised version of **type** above
-        * **name_plural** (``str``) Pluralised version of **name** above
-
-        :return: List of dictionaries for all entity type's info
-        :rtype: list[dict[str]]
-        '''
-        return [dict(fields=entityType.fields,
-                     type=entityType.type,
-                     name=entityType.name,
-                     type_plural=entityType.type_plural,
-                     name_plural=entityType.name_plural)
-                for entityType in self.get_entity_types_list()]
-
-    def get_entity_types_list(self):
-        '''Get a list of entity type information
-
-        Returns a list of :class:`Shotgun.EntityType` with the following
-        attributes:
-
-        * **fields** Empty fields list to be filled later
-        * **type** (``str``) Actual name of the entity from
-          ``schema_entity_read()``
-        * **name** (``str``) *Nicer* name of the entity (without spaces)
-        * **type_plural** (``str``) Pluralised version of **type** above
-        * **name_plural** (``str``) Pluralised version of **name** above
-
-        :return: List of :class:`Shotgun.EntityType` for all entity type's info
-        :rtype: list[Shotgun.EntityType]
-        '''
-        entitySchemaDict = self._sg.schema_entity_read()
+        entitySchema = self._sg.schema_entity_read()
         entities = []
-        for entityTypeName, entityTypeInfo in entitySchemaDict.iteritems():
-            if entityTypeName in ignoredTables:
+        for e in entitySchema:
+            if e in ignoredTables:
                 continue
-
-            entityName = entityTypeInfo['name']['value'].replace(" ", "")
-            entities.append(self.EntityType(entityTypeName,
-                                            entityName,
-                                            self.pluralise(entityTypeName),
-                                            self.pluralise(entityName)))
+            newEntity = {'type': e, 'name': entitySchema[e]['name']['value'].replace(" ", ""), 'fields': []}
+            newEntity['type_plural'] = self.pluralise(newEntity['type'])
+            newEntity['name_plural'] = self.pluralise(newEntity['name'])
+            entities.append(newEntity)
 
         return entities
 
     def translate_entity_type(self, entityType):
-        '''Translate entity type to 'real' entity type
 
-        i.e. ``CustomEntity02`` to ``Master``
-
-        :param entityType: Entity type name to translate
-        :type entityType: str
-        :raises ValueError: If it cannot find entityType in internal types list
-        :return: Name of the translated entity type
-        :rtype: str
+        ''' Translate entity type to 'real' entity type (ie. CustomEntity02 -> Master)
         '''
-        for entityType in self._entity_types:
-            if entityType.type == entityType:
-                return entityType.name
 
-        raise ValueError('Could not find entity of type %s' % entityType)
+        r = [ t for t in self._entity_types if t['type'] == entityType ]
 
-    def get_connection_types_names(self, niceNames=False):
-        '''Get a list of MOST of all the connection entity types' names
-
-        Basically filters current private entity types list which ends in
-        "Connection"
-
-        :keyword niceNames: Optionally get the nice names rather than official
-                            Shotgun entity names
-        :type niceNames: bool
-        :return: List of MOST of all the connection entity types' names
-        :rtype: list[str]
-        '''
-        if niceNames:
-            return [entityType.name for entityType in self._entity_types
-                    if entityType.name.endswith("Connection")]
+        if not r:
+            raise ValueError('Could not find entity of type %s' % entityType)
         else:
-            return [entityType.type for entityType in self._entity_types
-                    if entityType.type.endswith("Connection")]
+            return r[0]['name']
+
 
     def get_entity_field_list(self, entityType):
         fields = self.get_entity_fields(entityType)
@@ -392,61 +236,25 @@ class Shotgun(object):
         return self.get_entity_fields(entityType)[field].get('properties', {}).get('display_values', {}).get('value')
 
     def is_entity(self, entityType):
-        '''Check if a given (singular) entity type name is valid
-
-        :param entityType: Name of the entity type to check if valid (singular)
-        :type entityType: str
-        :return: If a given (singular) entity type name is valid
-        :rtype: bool
-        '''
-        for ourEntityType in self._entity_types:
-            if ourEntityType.isCalledSingular(entityType):
+        for e in self._entity_types:
+            if entityType in [e['type'], e['name']]:
                 return True
         return False
 
     def is_entity_plural(self, entityType):
-        '''Check if a given plural entity type name is valid
-
-        :param entityType: Name of the entity type to check if plural and valid
-        :type entityType: str
-        :return: If a given plural entity type name is valid
-        :rtype: bool
-        '''
-        for ourEntityType in self._entity_types:
-            if ourEntityType.isCalledPlural(entityType):
+        for e in self._entity_types:
+            if entityType in [e['type_plural'], e['name_plural']]:
                 return True
         return False
 
-    def get_real_type(self, entityType, defaults_to_parameter=False,
-                      defaults_to_paramater=False):
-        '''Translate given type to the real shotgun type
-
-        i.e. ``Cut`` to ``CustomEntity23``
-
-        If it cannot find the real type, it will return:
-
-        * ``None``, if ``defaults_to_parameter`` kwarg is ``False``, else
-        * The original ``entityType`` parameter, if ``defaults_to_parameter``
-          kwarg is ``True``
-
-        :param entityType: Name of the entity type to get real Shotgun type
-        :type entityType: str
-        :keyword defaults_to_parameter: Whether to return parameter if real type
-                                        cannot be determined
-        :type defaults_to_parameter: bool
-        :return: Real Shotgun type's name
-        :rtype: str or None
+    def get_real_type(self, entityType, defaults_to_paramater=False):
+        ''' Translate given type to the real shotgun type (ie Cut => CustomEntity23)
         '''
-        for ourEntityType in self._entity_types:
-            if ourEntityType.isCalled(entityType):
-                return ourEntityType.type
+        for e in self._entity_types:
+            if entityType in [e['type'], e['name'], e['type_plural'], e['name_plural']]:
+                return e['type']
 
-        if defaults_to_paramater or defaults_to_parameter:
-            # Warn of old, misspelled "defaults_to_paramater"
-            if defaults_to_paramater:
-                warnings.warn('Old kwarg "defaults_to_paramater" is spelt '
-                              'wrongand deprecated, please use '
-                              ' "defaults_to_parameter" instead')
+        if defaults_to_paramater:
             return entityType
         else:
             return None
@@ -473,7 +281,7 @@ class Shotgun(object):
 
 
     def find_entity(self, entityType, key = None, find_one = True, fields = None,
-                    order=None, exclude_fields = None, optional_filters=None, **kwargs):
+            order=None, exclude_fields = None, optional_filters=None, **kwargs):
         ''' Find Shotgun entity
 
         :param optional_filters: filters only applied when the result is not available from the cache
@@ -513,24 +321,25 @@ class Shotgun(object):
         thisEntityType = None
         thisEntityFields = None
 
-        for ourEntityType in self._entity_types:
-            if ourEntityType.isCalled(entityType):
-                thisEntityType = ourEntityType.type
-                if not ourEntityType.fields:
-                    ourEntityType.fields = self.get_entity_field_list(thisEntityType)
-                thisEntityFields = ourEntityType.fields
+        for e in self._entity_types:
+            if entityType in [e['type'], e['name'], e['type_plural'], e['name_plural']]:
+                thisEntityType = e['type']
+                if not e['fields']:
+                    e['fields'] = self.get_entity_field_list(thisEntityType)
+                thisEntityFields = e['fields']
 
         if key:
-            keyType = type(key)
-            if keyType == int:
+            if type(key) == int:
                 filters['id'] = key
-            elif keyType == str:
+            elif type(key) == str:
+                foundPrimaryKey = False
                 for fieldName in primaryTextKeys:
                     if fieldName in thisEntityFields:
                         filters[fieldName] = key
+                        foundPrimaryKey = True
                         break
-                else:  # No Break (for fieldName in primaryTextKeys:... else:)
-                    raise PrimaryKeysError(entityType)
+                if not foundPrimaryKey:
+                    raise ShotgunWrapperError("Entity type '%s' does not have one of the defined primary keys(%s)." % (entityType, ", ".join(primaryTextKeys)))
 
         for arg in kwargs:
             filters[arg] = self.get_entity_description(kwargs[arg])
@@ -557,12 +366,13 @@ class Shotgun(object):
                             entity = self._entities[thisEntityType][val]
 
                             if fields and not(set(fields) <= set(entity.fields())):
-                                # remove entity from cache
-                                # it will be added again after the new query
-                                self.unregister_entity(entity)
-                                missing_value_from_cache.append(val)
+                                    # remove entity from cache
+                                    # it will be added again after the new query
+                                    self.unregister_entity(entity)
+                                    missing_value_from_cache.append(val)
 
                             else:  # found in cache
+
                                 if find_one:
                                     return entity
                                 entities_from_cache.append(entity)
@@ -642,8 +452,10 @@ class Shotgun(object):
         else:
             sg_results = self.sg_find(thisEntityType, sgFilters, fields, sgOrder)
 
-            result = [Entity(self, thisEntityType, sg_result)
-                      for sg_result in sg_results]
+            result = []
+            for sg_result in sg_results:
+                result.append(Entity(self, thisEntityType, sg_result))
+
             result.extend(entities_from_cache)
 
         thisSearch = {}
@@ -818,7 +630,9 @@ class Shotgun(object):
 
             entityFields = self.get_entity_fields(entity.entity_type())
 
-            data = {f: entity.field(f) for f in updateFields}
+            data = {}
+            for f in updateFields:
+                data[f] = entity.field(f)
 
             updateData = self._translate_data(entityFields, data)
 
@@ -964,12 +778,12 @@ class Shotgun(object):
                         entity.commit()
 
     def create(self, entityType, **kwargs):
-        for ourEntityType in self._entity_types:
-            if ourEntityType.isCalled(entityType):
-                thisEntityType = ourEntityType.type
-                if not ourEntityType.fields:
-                    ourEntityType.fields = self.get_entity_field_list(thisEntityType)
-                thisEntityFields = ourEntityType.fields
+        for e in self._entity_types:
+            if entityType in [e['type'], e['name'], e['type_plural'], e['name_plural']]:
+                thisEntityType = e['type']
+                if not e['fields']:
+                    e['fields'] = self.get_entity_field_list(thisEntityType)
+                thisEntityFields = e['fields']
 
         entityFields = self.get_entity_fields(thisEntityType)
 
@@ -983,7 +797,7 @@ class Shotgun(object):
         ''' Translate sw_wrapper data to shotgun data '''
         translatedData = {}
 
-        for arg, entity in data.iteritems():
+        for arg in data:
 
             if arg not in entityFields:
                 continue
@@ -991,21 +805,21 @@ class Shotgun(object):
             # assume a list here
             if entityFields[arg]['data_type']['value'] in dataTypeList:
                 translatedData[arg] = []
-                for e in entity:
+                for e in data[arg]:
                     if isinstance(e, Entity):
                         translatedData[arg].append({
-                            'type': e['type'],
-                            'id': e['id']})
+                        'type': e['type'],
+                        'id': e['id']})
                     else:
                         translatedData[arg].append(e)
 
             else:
 
-                if isinstance(entity, Entity):
-                    translatedData[arg] = {'type': entity.entity_type(),
-                                           'id': entity.entity_id()}
+                if isinstance(data[arg], Entity):
+                    translatedData[arg] = {'type': data[arg].entity_type(),
+                            'id': data[arg].entity_id()}
                 else:
-                    translatedData[arg] = entity
+                    translatedData[arg] = data[arg]
 
         return translatedData
 
@@ -1017,13 +831,14 @@ class Shotgun(object):
         :return: list of results (Entity for create/update, bool for delete)
         :rtype: list
         '''
+
         sgRequests = []
 
         for request in requests:
             # Make sure entity_type is a real SG type
             for e in self._entity_types:
-                if request['entity_type'] in [e.type, e.name, e.type_plural, e.name_plural]:
-                    request['entity_type'] = e.type
+                if request['entity_type'] in [e['type'], e['name'], e['type_plural'], e['name_plural']]:
+                    request['entity_type'] = e['type']
 
             # Translate sg_wrapper.Entity to SG dict
             if 'data' in request:
@@ -1136,30 +951,10 @@ class Shotgun(object):
 
 
 class Entity(object):
-    '''Shotgun entity object that everyone uses
-    '''
     def __init__(self, shotgun, entity_type, fields):
-        '''Construct an Entity object of a specific type
-
-        :param shotgun: Shotgun object instance
-        :type shotgun: Shotgun
-        :param entity_type: Name of the entity's type
-        :type entity_type: str
-        :param fields: Fields values for this entity (Shotgun style dict)
-        :type fields: dict[str]
-        '''
         self._entity_type = entity_type
-        ''':var _entity_type: Name of the entity's type
-           :type _entity_type: str'''
-
         self._shotgun = shotgun
-        ''':var _shotgun: Shotgun object instance
-           :type _shotgun: Shotgun'''
-
         self._fields = fields
-        ''':var _fields: Fields values for this entity (Shotgun style dict)
-           :type _fields: dict[str]'''
-
         self._fields_changed = {}
         self._sg_filters = []
 
@@ -1217,17 +1012,19 @@ class Entity(object):
         return self._entity_id
 
     def field(self, fieldName, fields=None):
-        ''' Get entity field
 
-        .. note:: HIGHLY RECOMMENDED for speed purpose, specifying a small list
-                  of fields could help (if entity is not already in cache)
+        ''' Get entity field
 
         :param fieldName: field name to get
         :type fieldName: str
-        :keyword fields: list of fields to get (optional, default to all)
-        :type fields: list[str]
-        :return: Value of the field for our entity
+        :param fields: list of fields to get (optional, default to all)
+        :type fields: list
+
+        .. note::
+            for speed purpose, specifying a small list of fields
+            could help (if entity is not already in cache)
         '''
+
         # Workaround to fix the attachment access to path fields problem.
         # Attachements are handle differently by SG as some fields
         # are dynamic and not described in the schema making sg_wrapper
@@ -1245,56 +1042,29 @@ class Entity(object):
                                                                         id=attribute['id'],
                                                                         fields=fields)
                     return attribute['entity']
-
                 elif type(attribute) == list:
-                    return list(self.list_iterator(attribute, fields))
-
+                    iterator = self.list_iterator(currentFields[fieldName], fields)
+                    attrResult = []
+                    for item in iterator:
+                        attrResult.append(item)
+                    return attrResult
                 else:
-                    return attribute
+                    return currentFields[fieldName]
 
         raise AttributeError("Entity '%s' has no field '%s'" % (self._entity_type, fieldName))
 
-    def list_iterator(self, entities, fields=None, batch_requests=True):
-        '''Iterate through the list of entities passed in
+    def list_iterator(self, entities, fields, batch_requests=True):
+        # TODO atm it only fetches the new entity if it has not already been fetched
+        # but it should also check if every required fields are available in the pre-fetched entities
 
-        .. note:: HIGHLY RECOMMENDED for speed purpose, specifying a small list
-                  of fields could help (if entity is not already in cache)
-
-
-        Generator for the entities themselves, which may be:
-
-        * A string, i.e. ``Asset.tag_list`` (list of str), or
-        * An :class:`Entity`, e.g. ``Asset.tasks`` (list of :class:`Entity`).
-
-          Sometimes, the list of entities can also be a list of Shotgun style
-          dictionaries for entities yet to be converted to :class:`Entity`
-          objects. In that case, one of the following will be yielded:
-
-            * Value mapped to the ``'entity'`` key (if mapped), else
-            * An :class:`Entity` generated from:
-
-               * ``'type'`` and ``'id'`` keys,
-               * For only fields in the ``fields`` kwarg (if any are supplied)
-               * Using :func:`Shotgun.find_entity()`
-
-
-        .. todo:: (``batch_requests``) atm it only fetches the new entity if it
-                  has not already been fetched but it should also check if every
-                  required fields are available in the pre-fetched entities
-
-        :param entities: list of entities or names of entities to iterate
-        :type entities: list[dict[str]] or list[str] or list[Entity]
-        :keyword fields: list of fields to get (optional, default to all)
-        :type fields: list[str]
-        :return: Generator of :class:`Entity` or `str`
-        :rtype: Generator[Entity] or Generator[str]
-        '''
         if batch_requests:
             # batch the find_entity requests by entity type
             # to avoid making one request per entity to fetch
-            to_fetch = defaultdict(list)
+            to_fetch = {}
             for e in entities:
                 if not isinstance(e, (basestring, Entity)) and 'entity' not in e:
+                    if e['type'] not in to_fetch:
+                        to_fetch[e['type']] = []
                     to_fetch[e['type']].append(e)
 
             for tf_type, tf_entities in to_fetch.iteritems():
@@ -1305,6 +1075,7 @@ class Entity(object):
                     e['entity'] = res_by_id.get(e['id'])
 
         for entity in entities:
+
             # ie for Asset.tag_list (list of str) or for Asset.tasks (list of sg_wrapper.Entity)
             if isinstance(entity, (basestring, Entity)):
                 yield entity
