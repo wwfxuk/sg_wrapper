@@ -10,11 +10,8 @@ import shotgun_api3
 import psycopg2
 import inflection  # pluralize + convert to CamelCase to snake_case
 
-current_database_host = 'machete' if os.getenv('MIKSITE', 'mikros.int') == 'mikros.int' else 'jets'
-conn = psycopg2.connect(database='int_mikros_shotgun_anim', user='carbine', password='peppergun', host='machete')
-cursor = conn.cursor()
-
 from sg_wrapper_util import string_to_uuid, get_calling_script
+from corePython.decorators import ContextDecorator
 
 # The Primary Text Keys are the field names to check when not defined.
 # For example, calling sg.Project("my_project") will be the same as sg.Project(code = "my_project")
@@ -155,6 +152,46 @@ fixedEntityTypeTypes = {
     'permission_rule_set': 'PermissionRuleSet'
 }
 
+DB = 'int_mikros_shotgun_anim'
+DB_USER = 'carbine'
+DB_PASSWD = 'peppergun'
+DB_HOST = 'machete'
+current_database_host = 'machete' if os.getenv('MIKSITE', 'mikros.int') == 'mikros.int' else 'jets'
+
+
+class CarbineCtxt(ContextDecorator):
+    """
+    Block context verbose
+        Example:
+        from callBackChainMaya_common import Block
+        with Block('Foo'):
+            mc.setAttr(...)
+    """
+
+    def __init__(self):
+        super(CarbineCtxt, self).__init__()
+
+    def __enter__(self):
+        if conn.closed:
+            _connectCarbine()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if not conn.closed:
+            conn.close()
+
+
+def _connectCarbine():
+    global conn
+    global cursor
+
+    conn = psycopg2.connect(database=DB,
+                            user=DB_USER,
+                            password=DB_PASSWD,
+                            host=DB_HOST)
+    cursor = conn.cursor()
+
+
+_connectCarbine()
 
 
 class ShotgunWrapperError(Exception):
@@ -321,6 +358,7 @@ class Shotgun(object):
         fields = self.get_entity_fields(entityType)
         return fields.keys()
 
+    @CarbineCtxt()
     def get_entity_fields(self, entityType, sg_fields=None):
 
         if entityType not in self._entity_fields:
@@ -731,7 +769,9 @@ class Shotgun(object):
             return self._sg.find(entityType, filters, fields, order)
 
 
+    @CarbineCtxt()
     def carbine_find(self, entityType, filters, fields, order=None, find_one=False):
+
         startingTime = time.time()
         # entityType <=> table name (! need to handle translation)
         # ~ select *fields from entityType
@@ -882,9 +922,7 @@ class Shotgun(object):
             conn.isolation_level
         except Exception as e:
             print e.message
-            global conn
-            conn = psycopg2.connect(database='int_mikros_shotgun_anim', user='carbine', password='peppergun',
-                                    host='machete')
+            _connectCarbine()
 
         global cursor
         cursor = conn.cursor()
@@ -1739,8 +1777,9 @@ class Entity(object):
 
         self.__dict__.update(adict)
 
-
+@CarbineCtxt()
 def carbineMultiEntityGetter(sgw, subquery, subqueryData, destinationEntityType):
+
     res = []
     cursor.execute(subquery, subqueryData)
     for linkedEntity in cursor.fetchall():  # rows with only the destination id column
