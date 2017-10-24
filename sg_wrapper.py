@@ -918,11 +918,16 @@ class Shotgun(object):
         # TODO sometimes shotgun returns the display name (dunno why, dunno when) on nested structs
         # in addition to the type & the id
         # query = query.dicts()
+
         try:
             conn.isolation_level
-        except Exception as e:
-            print e.message
-            _connectCarbine()
+
+        except psycopg2.Error as e:
+            if "connection already closed" in e.message:
+                #print e.message
+                _connectCarbine()
+            else:
+                print e.message
 
         global cursor
         cursor = conn.cursor()
