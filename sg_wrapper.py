@@ -66,34 +66,6 @@ if os.getenv('PROD_TYPE', 'anim') == 'anim':
 else:
     ignoredTables = []
 
-def schemaFieldRead(sg, *args, **kwargs):
-    ''' To remove. Added to support shotgun 7.3 updates on tags
-
-    :param sg: [description]
-    :type sg: [type]
-    :param entityType: [description]
-    :type entityType: [type]
-    :returns: [description]
-    :rtype: {[type]}
-    '''
-
-    result = sg.schema_field_read(*args, **kwargs)
-    if 'tags' in result and  'tag_list' not in result:
-        result['tag_list'] = {'data_type': {'editable': False, 'value': 'tag_list'},
-                               'description': {'editable': True, 'value': ''},
-                               'editable': {'editable': False, 'value': True},
-                               'entity_type': {'editable': False, 'value': 'PublishedFile'},
-                               'mandatory': {'editable': False, 'value': False},
-                               'name': {'editable': True, 'value': 'Tags'},
-                               'properties': {'default_value': {'editable': False, 'value': None},
-                                'summary_default': {'editable': True, 'value': 'none'},
-                                'valid_types': {'editable': True, 'value': ['Tag']}},
-                               'ui_value_displayable': {'editable': False, 'value': True},
-                               'unique': {'editable': False, 'value': False},
-                               'visible': {'editable': False, 'value': True}}
-
-    return result
-
 
 class ShotgunWrapperError(Exception):
     pass
@@ -115,10 +87,6 @@ class retryWrapper(shotgun_api3.Shotgun):
         self_sg = object.__getattribute__(self, '_sg')
         if not hasattr(self_sg, attr):
             return object.__getattribute__(self, attr)
-
-        if attr == 'schema_field_read':
-            import types
-            return types.MethodType(schemaFieldRead, self_sg)
 
         attribute = self_sg.__getattribute__(attr)
         if not callable(attribute):
@@ -1029,6 +997,11 @@ class Entity(object):
         # Attachements are handle differently by SG as some fields
         # are dynamic and not described in the schema making sg_wrapper
         # go wrong.
+
+        # TO REMOVE when using shotgun-7.4+
+        if fieldName == 'tag_list':
+            print('Warning: tag_list field is deprecated')
+
         toVisit = [self._fields]
         if self._entity_type == 'Attachment':
             toVisit.append(self._fields['this_file'])
@@ -1050,6 +1023,12 @@ class Entity(object):
                     return attrResult
                 else:
                     return currentFields[fieldName]
+
+        # TO REMOVE when using shotgun-7.4+
+        if fieldName in ['tags', 'tag_list'] and fieldName not in self._fields:
+            return getattr(self._shotgun.find_entity(self._entity_type,
+                                                     id=self._entity_id,
+                                                     fields=[fieldName]), fieldName)
 
         raise AttributeError("Entity '%s' has no field '%s'" % (self._entity_type, fieldName))
 
