@@ -23,7 +23,11 @@ def get_calling_script():
     from inspect import stack
     import sys
 
-    _stack = stack()
+    try:
+        _stack = stack()
+    except:
+        print("Warning: Can't extract stack")
+        return None
 
     # find the last frame from a proper package
 
