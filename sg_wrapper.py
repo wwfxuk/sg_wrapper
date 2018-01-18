@@ -297,9 +297,9 @@ class Shotgun(object):
                 thisEntityFields = e['fields']
 
         if key:
-            if type(key) == int:
+            if isinstance(key, int):
                 filters['id'] = key
-            elif type(key) == str:
+            elif isinstance(key, basestring):
                 foundPrimaryKey = False
                 for fieldName in primaryTextKeys:
                     if fieldName in thisEntityFields:
