@@ -1099,7 +1099,7 @@ class Entity(object):
         if fieldName in entityFields:
 
             if entityFields[fieldName]['editable']['value'] == True:
-                oldValue = self._fields[fieldName]
+                oldValue = self._fields.get(fieldName)
                 self._fields[fieldName] = value
                 if fieldName not in self._fields_changed:
                     self._fields_changed[fieldName] = oldValue
@@ -1109,14 +1109,22 @@ class Entity(object):
             raise AttributeError("Entity '%s' has no field '%s'" % (self._entity_type, fieldName))
 
     def __getattr__(self, attrName):
-        return self.field(attrName)
+        try:
+            return self.field(attrName)
+        except AttributeError:
+            self.reload(mode='append', fields=[attrName])
+            return self.field(attrName)
 
     def __setattr__(self, attrName, value):
         if attrName[0] == "_":
             self.__dict__[attrName] = value
             return
 
-        self.set_field(attrName, value)
+        try:
+            self.set_field(attrName, value)
+        except AttributeError:
+            self.reload(mode='append', fields=[attrName])
+            self.set_field(attrName, value)
 
     def __getitem__(self, itemName):
         return self.field(itemName)
