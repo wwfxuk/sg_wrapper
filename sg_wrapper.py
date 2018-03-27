@@ -751,7 +751,6 @@ class Shotgun(object):
                 thisEntityType = e['type']
                 if not e['fields']:
                     e['fields'] = self.get_entity_field_list(thisEntityType)
-                thisEntityFields = e['fields']
 
         entityFields = self.get_entity_fields(thisEntityType)
 
@@ -759,7 +758,10 @@ class Shotgun(object):
 
         sgResult = self._sg.create(thisEntityType, data)
 
-        return Entity(self, sgResult['type'], sgResult)
+        e = Entity(self, sgResult['type'], sgResult)
+        self.register_entity(e)
+
+        return e
 
     def _translate_data(self, entityFields, data):
         ''' Translate sw_wrapper data to shotgun data '''
@@ -820,9 +822,11 @@ class Shotgun(object):
         results = []
         for sgResult in sgResults:
             if isinstance(sgResult, dict) and 'id' in sgResult and 'type' in sgResult:
-                results.append(Entity(self, sgResult['type'], sgResult))
+                e = Entity(self, sgResult['type'], sgResult)
             else:
-                results.append(sgResult)
+                e = sgResult
+            results.append(e)
+            self.register_entity(e)
 
         return results
 
