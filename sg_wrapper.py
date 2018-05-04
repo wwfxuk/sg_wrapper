@@ -751,6 +751,7 @@ class Shotgun(object):
                 thisEntityType = e['type']
                 if not e['fields']:
                     e['fields'] = self.get_entity_field_list(thisEntityType)
+                break
 
         entityFields = self.get_entity_fields(thisEntityType)
 
