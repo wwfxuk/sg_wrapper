@@ -756,7 +756,7 @@ class Shotgun(object):
 
         data = self._translate_data(entityFields, kwargs)
 
-        sgResult = self._sg.create(thisEntityType, data)
+        sgResult = self._sg.create(thisEntityType, data, return_fields=kwargs.get('return_fields'))
 
         e = Entity(self, sgResult['type'], sgResult)
         self.register_entity(e)
