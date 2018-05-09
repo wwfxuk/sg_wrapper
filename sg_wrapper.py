@@ -963,7 +963,7 @@ class Entity(object):
         else:
             raise ValueError('Unknown mode: %s' % (mode))
 
-        self._fields = self._shotgun.sg_find_one(self._entity_type, [["id", "is", self._entity_id]], fields = fieldsToQuery)
+        self._fields = self._shotgun.sg_find_one(self._entity_type, [["id", "is", self._entity_id]], fields = fieldsToQuery) or {}
 
     def fields(self):
         # Workaround to fix the attachment access to path fields problem.
@@ -1012,7 +1012,7 @@ class Entity(object):
             toVisit.append(self._fields['this_file'])
 
         for currentFields in toVisit:
-            if fieldName in currentFields:
+            if currentFields and fieldName in currentFields:
                 attribute = currentFields[fieldName]
                 if type(attribute) == dict and 'id' in attribute and 'type' in attribute:
                     if 'entity' not in attribute:
