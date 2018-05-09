@@ -1,5 +1,5 @@
 name = 'sg_wrapper'
-version = '0.0.0.mikros.1.10.1'
+version = '0.0.0.mikros.1.10.2'
 
 requires = ['shotgunPythonApi']
 
