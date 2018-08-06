@@ -628,11 +628,11 @@ class Shotgun(object):
             if not scriptName:
                 return (None, None)
 
-        scriptEntity = self.sg_find_one('ApiUser', [['firstname', 'is', scriptName]], ['firstname', 'salted_password'])  # also retrieve firstname because the search is case insensitive but the auth is not
+        scriptEntity = self.sg_find_one('ApiUser', [['firstname', 'is', scriptName]], ['firstname', 'sg_public_password'])  # also retrieve firstname because the search is case insensitive but the auth is not
 
         # if no api was found, search it in the retired api. If it is still not found, generate a key in shotgun
         if not scriptEntity:
-            archivedScripts = self._sg.find('ApiUser', [['firstname', 'is', scriptName]], ['firstname', 'salted_password'], [], 'all', 0, True)
+            archivedScripts = self._sg.find('ApiUser', [['firstname', 'is', scriptName]], ['firstname', 'sg_public_password'], [], 'all', 0, True)
 
             if len(archivedScripts) > 0:
                 scriptEntity = archivedScripts[0]
@@ -650,7 +650,7 @@ class Shotgun(object):
                 scriptEntity.reload()  # needed to retrieve the api key
 
         scriptName = scriptEntity['firstname']  # retrieve the script name because the 'is' query is case insensitive, but the auth is not
-        apiKey = scriptEntity['salted_password']
+        apiKey = scriptEntity['sg_public_password']
 
         return (scriptName, apiKey)
 
