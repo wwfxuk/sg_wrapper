@@ -591,7 +591,7 @@ class Shotgun(object):
         if type(updateFields) is dict:
             entityFields = self.get_entity_fields(entity.entity_type())
             updateData = self._translate_data(entityFields, updateFields)
-            self._sg.update(entity._entity_type, entity._entity_id, updateData)
+            updatedData = self._sg.update(entity._entity_type, entity._entity_id, updateData)
 
         elif type(updateFields) is list:
             print('Warning: sg_wrapper shotgun.update using a field list is deprecated')
@@ -604,10 +604,14 @@ class Shotgun(object):
 
             updateData = self._translate_data(entityFields, data)
 
-            self._sg.update(entity._entity_type, entity._entity_id, updateData)
+            updatedData = self._sg.update(entity._entity_type, entity._entity_id, updateData)
 
         else:
             raise ValueError('Field type not supported: %s' % type(updateFields))
+
+        # Apply changes on the entity
+        entity._fields.update(updatedData)
+        return entity
 
     def get_new_shotgun_auth_info(self, scriptName=''):
         ''' Get updated shotgun's auth info for the current script
