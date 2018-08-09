@@ -63,8 +63,10 @@ if os.getenv('PROD_TYPE', 'anim') == 'anim':
     ignoredTables = [
         'Cut',
     ]
+    remapTables = {'CustomEntity03': 'EditingCut'}
 else:
     ignoredTables = []
+    remapTables = {}
 
 
 class ShotgunWrapperError(Exception):
@@ -171,10 +173,17 @@ class Shotgun(object):
         for e in entitySchema:
             if e in ignoredTables:
                 continue
-            newEntity = {'type': e, 'name': entitySchema[e]['name']['value'].replace(" ", ""), 'fields': []}
-            newEntity['type_plural'] = self.pluralise(newEntity['type'])
-            newEntity['name_plural'] = self.pluralise(newEntity['name'])
-            entities.append(newEntity)
+
+            entityDisplayName = entitySchema[e]['name']['value'].replace(" ", "")
+            entityTypesToRegister = [entityDisplayName]
+            if e in remapTables:
+                entityTypesToRegister.append(remapTables[e])
+
+            for entityTypeToRegister in entityTypesToRegister:
+                newEntity = {'type': e, 'name': entityTypeToRegister, 'fields': []}
+                newEntity['type_plural'] = self.pluralise(newEntity['type'])
+                newEntity['name_plural'] = self.pluralise(newEntity['name'])
+                entities.append(newEntity)
 
         return entities
 
