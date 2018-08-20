@@ -58,12 +58,13 @@ dataTypeList = frozenset([
     'addressing'
     ])
 
+# To remove when editing cut entity will no longer exist
 # anim only: exclude 'Cut' table to avoid conflicts with the CustomEntity23
 if os.getenv('PROD_TYPE', 'anim') == 'anim':
     ignoredTables = [
         'Cut',
     ]
-    remapTables = {'CustomEntity03': 'EditingCut'}
+    remapTables = {'CustomEntity23': 'EditingCut'}
 else:
     ignoredTables = []
     remapTables = {}
