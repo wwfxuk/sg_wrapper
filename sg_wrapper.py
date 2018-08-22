@@ -1172,7 +1172,7 @@ class Entity(object):
             self._set_field(fieldName, value)
 
     def __getattr__(self, attrName):
-        return self.field(attrName, fields=['id'])
+        return self.field(attrName)
 
     def __setattr__(self, attrName, value):
         if attrName[0] == "_":
@@ -1182,7 +1182,7 @@ class Entity(object):
         self.set_field(attrName, value)
 
     def __getitem__(self, itemName):
-        return self.field(itemName, fields=['id'])
+        return self.field(itemName)
 
     def __setitem__(self, itemName, value):
         self.set_field(itemName, value)
