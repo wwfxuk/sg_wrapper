@@ -998,7 +998,7 @@ class Entity(object):
     def entity_id(self):
         return self._entity_id
 
-    def field(self, fieldName, fields=None):
+    def _field(self, fieldName, fields=None):
 
         ''' Get entity field
 
@@ -1050,6 +1050,27 @@ class Entity(object):
                                                      fields=[fieldName]), fieldName)
 
         raise AttributeError("Entity '%s' has no field '%s'" % (self._entity_type, fieldName))
+
+    def field(self, fieldName, fields=None):
+
+        ''' Get entity field, and do a new request if field not in cache yet
+
+        :param fieldName: field name to get
+        :type fieldName: str
+        :param fields: list of fields to get (optional, default to all)
+        :type fields: list
+
+        .. note::
+            for speed purpose, specifying a small list of fields
+            could help (if entity is not already in cache)
+        '''
+
+        try:
+            return self._field(fieldName, fields=fields)
+
+        except AttributeError:
+            self.reload(mode='append', fields=[fieldName])
+            return self._field(fieldName, fields=fields)
 
     def list_iterator(self, entities, fields, batch_requests=True):
         # TODO atm it only fetches the new entity if it has not already been fetched
@@ -1107,7 +1128,7 @@ class Entity(object):
                 self._fields[field] = self._fields_changed[field]
                 del self._fields_changed[field]
 
-    def set_field(self, fieldName, value):
+    def _set_field(self, fieldName, value):
 
         entityFields = self._shotgun.get_entity_fields(self._entity_type)
 
@@ -1123,26 +1144,27 @@ class Entity(object):
         else:
             raise AttributeError("Entity '%s' has no field '%s'" % (self._entity_type, fieldName))
 
-    def __getattr__(self, attrName):
+    def set_field(self, fieldName, value):
+
         try:
-            return self.field(attrName)
+            self._set_field(fieldName, value)
+
         except AttributeError:
-            self.reload(mode='append', fields=[attrName])
-            return self.field(attrName)
+            self.reload(mode='append', fields=[fieldName])
+            self._set_field(fieldName, value)
+
+    def __getattr__(self, attrName):
+        return self.field(attrName, fields=['id'])
 
     def __setattr__(self, attrName, value):
         if attrName[0] == "_":
             self.__dict__[attrName] = value
             return
 
-        try:
-            self.set_field(attrName, value)
-        except AttributeError:
-            self.reload(mode='append', fields=[attrName])
-            self.set_field(attrName, value)
+        self.set_field(attrName, value)
 
     def __getitem__(self, itemName):
-        return self.field(itemName)
+        return self.field(itemName, fields=['id'])
 
     def __setitem__(self, itemName, value):
         self.set_field(itemName, value)
