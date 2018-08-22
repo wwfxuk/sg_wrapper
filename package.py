@@ -1,21 +1,30 @@
 name = 'sg_wrapper'
-version = '0.0.0.mikros.1.11.0'
+version = '0.0.0.wwfx.1.0.0'
 
-requires = ['shotgunPythonApi']
+requires = ['shotgun_api']
 
-custom = {
-        'description': 'Wrapper around shotgun',
-        # 'doc': '',
-        # 'wiki': 'http://wiki.mikros.int/doku.php?id=anim:dev:sg_wrapper',
-        'authors': ['syd', 'jbi'],
-        'maintainers': ['syd', 'jbi'],
-        }
+authors = [
+    'Sylvain Delhomme',
+    'Joran Bigalet',
+    'Joseph Yu',
+]
+
+description = 'Wrapper around shotgun'
 
 def commands():
-
     import os
-
     env.PYTHONPATH.append('{root}')
-
     alias('userFromEvent', os.path.join(this.root, 'scripts', 'userFromEvent.py'))
     alias('evusr', 'userFromEvent')
+
+build_command = r"""
+
+cp -r {root}/sg_wrapper* {root}/scripts $REZ_BUILD_PATH/
+
+# If install as rez package, copy shotgun_api3 to package directory
+if [[ "{install}" ]]
+then
+    cp -r $REZ_BUILD_PATH/* $REZ_BUILD_INSTALL_PATH/
+fi
+
+"""
